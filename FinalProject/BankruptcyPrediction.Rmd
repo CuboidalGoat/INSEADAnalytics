@@ -1,6 +1,6 @@
 ---
-title: "Classification for Credit Card Default"
-author: "Theos Evgeniou, Spyros Zoumpoulis"
+title: "Predict Bankruptcy of Companies"
+author: "Data Scientologists"
 output:
   html_document:
     css: ../AnalyticsStyles/default.css
@@ -32,7 +32,7 @@ options(knitr.kable.NA = '')
 
 ```{r echo=FALSE, message=FALSE}
 # Please ENTER the filename
-datafile_name = "../Data/UCI_Credit_Card.csv"
+datafile_name = "~/Github/Data Scientogolists/INSEADAnalytics/FinalProject/Data/data.csv"
 ProjectData <- read.csv(datafile_name)
 # We turn the data into data.matrix class so that we can easier manipulate it
 ProjectData <- data.matrix(ProjectData)
@@ -40,11 +40,11 @@ ProjectData <- data.matrix(ProjectData)
 # Please ENTER the dependent variable (class).
 # Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
 # You need to make sure that dependent variable takes only two values: 0 and 1.
-dependent_variable = 25
+dependent_variable = 1
 
 # Please ENTER the attributes to use as independent variables. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
-independent_variables = c(1:24) # use all the available attributes
+independent_variables = c(2:95) # use all the available attributes
 
 dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
 independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
@@ -92,9 +92,10 @@ max_data_report = 10
 ```
 
 # The Business Context
-A Taiwan-based credit card issuer wants to better predict the likelihood of default for its customers, as well as identify the key drivers that determine this likelihood. This would inform the issuer's decisions on who to give a credit card to and what credit limit to provide. It would also help the issuer have a better understanding of their current and potential customers, which would inform their future strategy, including their planning of offering targeted credit products to their customers. 
+In order to build trust and investor confidence, market participants need to know whether or not the firm they are investing in will be financially solvent in the future. If the investing public is unable to identify and understand the financial risks of the company they are investing in, overall investment into the economy will decline. As foreign investment is critical for the growth of the economy of any nation, it is imperative that people can properly assess the risks associated with firms in the market. Greater transparency around financial distress and bankruptcy risk are vital for the investing public, as well as the entire economy. In this project we are evaluating several factors to predict bankruptcy of a company based on data from the Taiwanese economy. Findings from this analysis could extend to other markets across the globe as well.
 
-
+# The Business Solution Process
+The business problem is a classification problem. We have several dependent variables which we would utilize to identify the signals of bankruptcy and create a model that would be capable of predicting bankruptcy given a set of inputs based on a companies financial results.
 
 <hr>\clearpage
 

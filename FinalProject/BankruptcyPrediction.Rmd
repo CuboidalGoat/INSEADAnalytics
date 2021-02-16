@@ -256,10 +256,6 @@ lasso_classification<-rep("1",1000)
 lasso_classification[lasso_probabilities<0.3]="0" 
 lasso_classification<-as.factor(lasso_classification)
 
-```
-
-```{r echo=FALSE}
-
 ###Confusion matrix  
 confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
 

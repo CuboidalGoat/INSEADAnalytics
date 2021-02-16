@@ -35,6 +35,7 @@ options(knitr.kable.NA = '')
 ```{r}
 #1 means we are using this method, 0 means we are not using it
 XGBoost = 1
+Random_Forest = 1
 ```
 
 >Scrubbing the Data Clean
@@ -1020,5 +1021,28 @@ rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability 
 colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
 
 knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```
+
+<!-- **Random Forest:** -->
+```{r echo=FALSE}
+if (Random_Forest){
+model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimation_data[,dependent_variable], importance=TRUE, proximity=TRUE, type="classification")
+# 
+# # Let's get the probabilities for the 3 types of data from the random forest
+ estimation_Probability_class1_random_forest<-predict(model_forest, estimation_data, type="response")
+ validation_Probability_class1_random_forest<-predict(model_forest, validation_data, type="response")
+ test_Probability_class1_random_forest<-predict(model_forest, test_data, type="response")
+# 
+# # Let's get the decision of the random forest for the 3 types of data 
+ estimation_prediction_class_random_forest=1*as.vector(estimation_Probability_class1_random_forest > Probability_Threshold)
+ validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold)
+ test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold)
+# 
+ Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
+ rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+# 
+ knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
 }
 ```

@@ -1,5 +1,5 @@
 ---
-title: "Predict Bankruptcy of Companies"
+title: "Predict Bankruptcy Of Companies"
 author: "Data Scientologists"
 output:
   html_document:

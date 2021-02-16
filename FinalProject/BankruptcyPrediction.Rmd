@@ -36,6 +36,7 @@ options(knitr.kable.NA = '')
 #1 means we are using this method, 0 means we are not using it
 XGBoost = 1
 Random_Forest = 1
+SVM = 1
 ```
 
 >Scrubbing the Data Clean

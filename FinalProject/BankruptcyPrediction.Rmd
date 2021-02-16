@@ -36,7 +36,7 @@ options(knitr.kable.NA = '')
 
 ```{r echo=FALSE, message=FALSE}
 # Please ENTER the filename
-datafile_name = "~/Github/Data Scientogolists/INSEADAnalytics/FinalProject/Data/data.csv"
+datafile_name = "./Data/data.csv"
 ProjectData <- read.csv(datafile_name)
 
 # Fixing incorrectly classified data types in training data:

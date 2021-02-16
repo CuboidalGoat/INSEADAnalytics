@@ -1045,5 +1045,6 @@ model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimat
  colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
 # 
  knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+ 
 }
 ```

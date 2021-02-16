@@ -30,12 +30,74 @@ opts_chunk$set(echo=FALSE, fig.align="center", fig.width=10, fig.height=6.2)
 options(knitr.kable.NA = '')
 ```
 
+
+
+>Scrubbing the Data Clean
+
 ```{r echo=FALSE, message=FALSE}
 # Please ENTER the filename
 datafile_name = "~/Github/Data Scientogolists/INSEADAnalytics/FinalProject/Data/data.csv"
 ProjectData <- read.csv(datafile_name)
+
+# Fixing incorrectly classified data types in training data:
+ProjectData$ Bankrupt. <- as.factor(ProjectData$ Bankrupt.)
+ProjectData$ Net.Income.Flag <- as.factor(ProjectData$ Net.Income.Flag)
+ProjectData$ Liability.Assets.Flag <- as.factor(ProjectData$ Liability.Assets.Flag)
+
+# Create a custom function to fix missing values ("NAs") and preserve the NA info as surrogate variables
+
+fixNAs<-function(data_frame){
+  # Define reactions to NAs
+  integer_reac<-0
+  factor_reac<-"FIXED_NA"
+  character_reac<-"FIXED_NA"
+  date_reac<-as.Date("1900-01-01")
+  # Loop through columns in the data frame and depending on which class the variable is, apply the defined reaction and create a surrogate
+  
+  for (i in 1 : ncol(data_frame)){
+    if (class(data_frame[,i]) %in% c("numeric","integer")) {
+      if (any(is.na(data_frame[,i]))){
+        data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+          as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+        data_frame[is.na(data_frame[,i]),i]<-integer_reac
+      }
+    } else
+      if (class(data_frame[,i]) %in% c("factor")) {
+        if (any(is.na(data_frame[,i]))){
+          data_frame[,i]<-as.character(data_frame[,i])
+          data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+            as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+          data_frame[is.na(data_frame[,i]),i]<-factor_reac
+          data_frame[,i]<-as.factor(data_frame[,i])
+          
+        } 
+      } else {
+        if (class(data_frame[,i]) %in% c("character")) {
+          if (any(is.na(data_frame[,i]))){
+            data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+              as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+            data_frame[is.na(data_frame[,i]),i]<-character_reac
+          }  
+        } else {
+          if (class(data_frame[,i]) %in% c("Date")) {
+            if (any(is.na(data_frame[,i]))){
+              data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+                as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+              data_frame[is.na(data_frame[,i]),i]<-date_reac
+            }
+          }  
+        }       
+      }
+  } 
+  return(data_frame) 
+}
+
+ProjectData<-fixNAs(ProjectData)
+```
+
+```{r echo=FALSE, message=FALSE}
 # We turn the data into data.matrix class so that we can easier manipulate it
-ProjectData <- data.matrix(ProjectData)
+####ProjectData <- data.matrix(ProjectData)
 
 # Please ENTER the dependent variable (class).
 # Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
@@ -91,57 +153,7 @@ rownames(Profit_Matrix) <- c(paste("Actual 1 (", class_1_interpretation, ")", se
 max_data_report = 10 
 ```
 
-# The Business Context
-In order to build trust and investor confidence, market participants need to know whether or not the firm they are investing in will be financially solvent in the future. If the investing public is unable to identify and understand the financial risks of the company they are investing in, overall investment into the economy will decline. As foreign investment is critical for the growth of the economy of any nation, it is imperative that people can properly assess the risks associated with firms in the market. Greater transparency around financial distress and bankruptcy risk are vital for the investing public, as well as the entire economy. In this project we are evaluating several factors to predict bankruptcy of a company based on data from the Taiwanese economy. Findings from this analysis could extend to other markets across the globe as well.
 
-# The Business Solution Process
-The business problem is a classification problem. We have several dependent variables which we would utilize to identify the signals of bankruptcy and create a model that would be capable of predicting bankruptcy given a set of inputs based on a companies financial results.
-
-<hr>\clearpage
-
-# The Data
-(Data source: https://www.kaggle.com/uciml/default-of-credit-card-clients-dataset. We acknowledge the following:
-Lichman, M. (2013). UCI Machine Learning Repository [http://archive.ics.uci.edu/ml]. Irvine, CA: University of California, School of Information and Computer Science.)
-
-The credit card issuer has gathered information on `r nrow(ProjectData)` customers. The dataset contains information on `r length(independent_variables)` variables, including demographic factors, credit data, history of payment, and bill statements of credit card customers from April 2005 to September 2005, as well as information on the outcome: did the customer default or not?
-
-Name                       | Description
-:--------------------------|:--------------------------------------------------------------------
-ID                         | ID of each client
-LIMIT_BAL                  | Amount of given credit in NT dollars (includes individual and family/supplementary credit)
-SEX                        | Gender (1=male, 2=female)
-EDUCATION                  | (1=graduate school, 2=university, 3=high school, 4=others, 5=unknown, 6=unknown)
-MARRIAGE                   | Marital status (1=married, 2=single, 3=others)
-AGE                        | Age in years
-PAY_0                      | Repayment status in September, 2005 (-2=no consumption, -1=pay duly, 0=the use of revolving credit, 1=payment delay for one month, 2=payment delay for two months, ... 8=payment delay for eight months, 9=payment delay for nine months and above)
-PAY_2                      | Repayment status in August, 2005 (scale same as above)
-PAY_3                      | Repayment status in July, 2005 (scale same as above)
-PAY_4                      | Repayment status in June, 2005 (scale same as above)
-PAY_5                      | Repayment status in May, 2005 (scale same as above)
-PAY_6                      | Repayment status in April, 2005 (scale same as above)
-BILL_AMT1                  | Amount of bill statement in September, 2005 (NT dollar)
-BILL_AMT2                  | Amount of bill statement in August, 2005 (NT dollar)
-BILL_AMT3                  | Amount of bill statement in July, 2005 (NT dollar)
-BILL_AMT4                  | Amount of bill statement in June, 2005 (NT dollar)
-BILL_AMT5                  | Amount of bill statement in May, 2005 (NT dollar)
-BILL_AMT6                  | Amount of bill statement in April, 2005 (NT dollar)
-PAY_AMT1                   | Amount of previous payment in September, 2005 (NT dollar)
-PAY_AMT2                   | Amount of previous payment in August, 2005 (NT dollar)
-PAY_AMT3                   | Amount of previous payment in July, 2005 (NT dollar)
-PAY_AMT4                   | Amount of previous payment in June, 2005 (NT dollar)
-PAY_AMT5                   | Amount of previous payment in May, 2005 (NT dollar)
-PAY_AMT6                   | Amount of previous payment in April, 2005 (NT dollar)
-default.payment.next.month | Default payment (1=yes, 0=no)
-
-Let's look into the data for a few customers. This is how the first `r min(max_data_report, nrow(ProjectData))` out of the total of `r nrow(ProjectData)` rows look like (transposed, for convenience):
-
-```{r echo=FALSE, message=FALSE, prompt=FALSE, results='asis'}
-knitr::kable({
-  df <- t(head(round(ProjectData[,independent_variables],2), max_data_report))
-  colnames(df) <- sprintf("%02d", 1:ncol(df))
-  df
-})
-```
 
 <hr>\clearpage
 

@@ -40,9 +40,9 @@ datafile_name = "~/Github/Data Scientogolists/INSEADAnalytics/FinalProject/Data/
 ProjectData <- read.csv(datafile_name)
 
 # Fixing incorrectly classified data types in training data:
-ProjectData$ Bankrupt. <- as.factor(ProjectData$ Bankrupt.)
 ProjectData$ Net.Income.Flag <- as.factor(ProjectData$ Net.Income.Flag)
 ProjectData$ Liability.Assets.Flag <- as.factor(ProjectData$ Liability.Assets.Flag)
+#ProjectData$ Bankrupt. <- factor(ProjectData$ Bankrupt.,levels = c(0,1))
 
 # Create a custom function to fix missing values ("NAs") and preserve the NA info as surrogate variables
 
@@ -97,7 +97,7 @@ ProjectData<-fixNAs(ProjectData)
 
 ```{r echo=FALSE, message=FALSE}
 # We turn the data into data.matrix class so that we can easier manipulate it
-####ProjectData <- data.matrix(ProjectData)
+ProjectData <- data.matrix(ProjectData)
 
 # Please ENTER the dependent variable (class).
 # Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
@@ -106,7 +106,7 @@ dependent_variable = 1
 
 # Please ENTER the attributes to use as independent variables. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
-independent_variables = c(2:95) # use all the available attributes
+independent_variables = c(2:96) # use all the available attributes
 
 dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
 independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
@@ -255,7 +255,7 @@ A simple visualization tool to assess the discriminatory power of the independen
 ```{r echo=FALSE, fig.height=4.5}
 # Please ENTER the selected independent variables for which to draw box plots. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
-boxplots_independent_variables = c(7:12) # use only the PAY_ variables
+boxplots_independent_variables = c(34:42) # use only the PAY_ variables
 
 DVvalues = unique(estimation_data[,dependent_variable])
 x0 = estimation_data[which(estimation_data[,dependent_variable]==DVvalues[1]),boxplots_independent_variables]
@@ -372,7 +372,7 @@ The leaves of the tree indicate the number of estimation data observations that 
 ```{r echo=FALSE}
 # Tree parameter
 # Please ENTER the new tree (CART) complexity control cp 
-CART_cp = 0.00068
+CART_cp = 0.0068
 ```
 
 One can estimate larger trees through changing the tree's **complexity control** parameter (in this case the rpart.control argument cp). For example, this is how the tree would look like if we set cp=`r toString(CART_cp)`:
@@ -576,7 +576,7 @@ df.all <- do.call(rbind, lapply(list(df1, df2, df3), function(df) {
   colnames(df)[1] <- "False Positive rate"
   df
 }))
-ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="blue")
 ```
 
 How should a good ROC curve look like? A rule of thumb in assessing ROC curves is that the "higher" the curve (i.e., the closer it gets to the point with coordinates (0,1)), hence the larger the area under the curve, the better. You may also select one point on the ROC curve (the "best one" for our purpose) and use that false positive/false negative performances (and corresponding threshold for P(1)) to assess your model. 

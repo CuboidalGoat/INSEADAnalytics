@@ -30,7 +30,12 @@ opts_chunk$set(echo=FALSE, fig.align="center", fig.width=10, fig.height=6.2)
 options(knitr.kable.NA = '')
 ```
 
+> Methods we are undertaking
 
+```{r}
+#1 means we are using this method, 0 means we are not using it
+XGBoost = 1
+```
 
 >Scrubbing the Data Clean
 
@@ -976,3 +981,44 @@ ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + geo
 *
 *
 *
+
+```{r echo=FALSE}
+if (XGBoost){
+model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables]), 
+                         label = estimation_data[,dependent_variable], 
+                         eta = 0.3, 
+                         max_depth = 10, 
+                         nrounds=10, 
+                         objective = "binary:logistic", 
+                         verbose = 0)
+# eta: step size of each boosting step. max.depth: maximum depth of the tree. nrounds: the max number of iterations. We use the logistic regression as the objective. verbose=1 prints information about performance. Check https://www.rdocumentation.org/packages/xgboost/versions/0.4-4/topics/xgboost
+
+# # Alternative way of building the model, recommended when there are factors among the variables (xgboost does not accept factors as inputs, so need to use a design matrix):
+# formula_allvariables=paste(colnames(estimation_data[,dependent_variable,drop=F]),".",sep="~")
+# training.x <-model.matrix(as.formula(formula_allvariables), data = estimation_data)
+# testing.x <-model.matrix(as.formula(formula_allvariables), data = validation_data)
+# 
+# model_xgboost<-xgboost(data = data.matrix(training.x[,-1]), label = estimation_data[,dependent_variable], eta = 0.3, max_depth = 10, nround=10, objective = "binary:logistic", verbose = 1)
+# 
+# xgboost_prediction<-predict(model_xgboost,newdata=testing.x[,-1], type="response")
+# #confusionMatrix(ifelse(XGboost_prediction>0.5,1,0),validation_data$default.payment.next.month) #Display confusion matrix (needs caret package)
+
+
+# Let's get the probabilities for the 3 types of data from xgboost
+estimation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(estimation_data[,independent_variables]), type="response")
+validation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(validation_data[,independent_variables]), type="response")
+#confusionMatrix(ifelse(validation_Probability_class1_xgboost>0.5,1,0),validation_data[,dependent_variable]) #Display confusion matrix (needs caret package)
+test_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(test_data[,independent_variables]), type="response")
+
+# Let's get the decision of xgboost for the 3 types of data 
+estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xgboost > Probability_Threshold)
+validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
+test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
+
+Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
+rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```

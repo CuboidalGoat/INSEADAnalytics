@@ -30,13 +30,18 @@ opts_chunk$set(echo=FALSE, fig.align="center", fig.width=10, fig.height=6.2)
 options(knitr.kable.NA = '')
 ```
 
+> Methods we are undertaking
 
+```{r}
+#1 means we are using this method, 0 means we are not using it
+XGBoost = 1
+```
 
 >Scrubbing the Data Clean
 
 ```{r echo=FALSE, message=FALSE}
 # Please ENTER the filename
-datafile_name = "~/Github/Data Scientogolists/INSEADAnalytics/FinalProject/Data/data.csv"
+datafile_name = "./Data/data.csv"
 ProjectData <- read.csv(datafile_name)
 
 # Fixing incorrectly classified data types in training data:
@@ -979,7 +984,13 @@ ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + geo
 
 ```{r echo=FALSE}
 if (XGBoost){
-model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables]), label = estimation_data[,dependent_variable], eta = 0.3, max_depth = 10, nrounds=10, objective = "binary:logistic", verbose = 0)
+model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables]), 
+                         label = estimation_data[,dependent_variable], 
+                         eta = 0.3, 
+                         max_depth = 10, 
+                         nrounds=10, 
+                         objective = "binary:logistic", 
+                         verbose = 0)
 # eta: step size of each boosting step. max.depth: maximum depth of the tree. nrounds: the max number of iterations. We use the logistic regression as the objective. verbose=1 prints information about performance. Check https://www.rdocumentation.org/packages/xgboost/versions/0.4-4/topics/xgboost
 
 # # Alternative way of building the model, recommended when there are factors among the variables (xgboost does not accept factors as inputs, so need to use a design matrix):
@@ -991,6 +1002,7 @@ model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables
 # 
 # xgboost_prediction<-predict(model_xgboost,newdata=testing.x[,-1], type="response")
 # #confusionMatrix(ifelse(XGboost_prediction>0.5,1,0),validation_data$default.payment.next.month) #Display confusion matrix (needs caret package)
+
 
 # Let's get the probabilities for the 3 types of data from xgboost
 estimation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(estimation_data[,independent_variables]), type="response")

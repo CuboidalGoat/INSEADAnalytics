@@ -591,16 +591,25 @@ estimation_Probability_class1_log<-predict(logreg_solution, type="response", new
 validation_Probability_class1_log<-predict(logreg_solution, type="response", newdata=validation_data[,independent_variables])
 test_Probability_class1_log<-predict(logreg_solution, type="response", newdata=test_data[,independent_variables])
 
+#Optimizing the probability threshold to maximize profit
+theprofit_log_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_log=1*as.vector(test_Probability_class1_log > i/100)
+  theprofit_log <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_log==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_log==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_log==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_log==0)
+  if (theprofit_log > theprofit_log_max){
+    theprofit_log_max <- theprofit_log
+    Probability_Threshold_log <- i/100
+  }
+}
+
 # Let's get the decision of the logistic regression for the 3 types of data 
-estimation_prediction_class_log=1*as.vector(estimation_Probability_class1_log > Probability_Threshold)
-validation_prediction_class_log=1*as.vector(validation_Probability_class1_log > Probability_Threshold)
-test_prediction_class_log=1*as.vector(test_Probability_class1_log > Probability_Threshold)
-
-
-theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
-    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
-    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
-    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+estimation_prediction_class_log=1*as.vector(estimation_Probability_class1_log > Probability_Threshold_log)
+validation_prediction_class_log=1*as.vector(validation_Probability_class1_log > Probability_Threshold_log)
+test_prediction_class_log=1*as.vector(test_Probability_class1_log > Probability_Threshold_log)
 
 
 Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
@@ -674,14 +683,42 @@ validation_Probability_class1_tree_large<-predict(CART_tree_large, validation_da
 test_Probability_class1_tree<-predict(CART_tree, test_data_nolabel)[,2]
 test_Probability_class1_tree_large<-predict(CART_tree_large, test_data_nolabel)[,2]
 
-estimation_prediction_class_tree=1*as.vector(estimation_Probability_class1_tree > Probability_Threshold)
-estimation_prediction_class_tree_large=1*as.vector(estimation_Probability_class1_tree_large > Probability_Threshold)
+#Optimizing the probability threshold to maximize profit
+theprofit_tree_max <- 0
+theprofit_tree_large_max <- 0
 
-validation_prediction_class_tree=1*as.vector(validation_Probability_class1_tree > Probability_Threshold)
-validation_prediction_class_tree_large=1*as.vector(validation_Probability_class1_tree_large > Probability_Threshold)
+for (i in 1:100) {
+  test_prediction_class_tree=1*as.vector(test_Probability_class1_tree > i/100)
+  theprofit_tree <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree==0)
+  if (theprofit_tree > theprofit_tree_max){
+    theprofit_tree_max <- theprofit_tree
+    Probability_Threshold_tree <- i/100
+  }
+}
 
-test_prediction_class_tree=1*as.vector(test_Probability_class1_tree > Probability_Threshold)
-test_prediction_class_tree_large=1*as.vector(test_Probability_class1_tree_large > Probability_Threshold)
+for (i in 1:100) {
+  test_prediction_class_tree_large=1*as.vector(test_Probability_class1_tree_large > i/100)
+  theprofit_tree_large <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree_large==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree_large==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree_large==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree_large==0)
+  if (theprofit_tree_large > theprofit_tree_large_max){
+    theprofit_tree_large_max <- theprofit_tree_large
+    Probability_Threshold_tree_large <- i/100
+  }
+}
+
+estimation_prediction_class_tree=1*as.vector(estimation_Probability_class1_tree > Probability_Threshold_tree)
+estimation_prediction_class_tree_large=1*as.vector(estimation_Probability_class1_tree_large > Probability_Threshold_tree_large)
+
+validation_prediction_class_tree=1*as.vector(validation_Probability_class1_tree > Probability_Threshold_tree)
+validation_prediction_class_tree_large=1*as.vector(validation_Probability_class1_tree_large > Probability_Threshold_tree_large)
+
+test_prediction_class_tree=1*as.vector(test_Probability_class1_tree > Probability_Threshold_tree)
+test_prediction_class_tree_large=1*as.vector(test_Probability_class1_tree_large > Probability_Threshold_tree_large)
 
 Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_tree,validation_Probability_class1_tree)
 rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
@@ -717,7 +754,6 @@ tree_importance_final = rep(0,length(independent_variables))
 tree_importance_final[tree_ordered_drivers] <- tree_importance
 tree_importance_final <- tree_importance_final/max(abs(tree_importance_final))
 tree_importance_final <- tree_importance_final*sign(log_importance)
-#error here due to logistic regression failure/error: Error: dims [product 91] do not match the length of object [95]
 
 large_tree_importance = CART_tree_large$variable.importance
 large_tree_ordered_drivers = as.numeric(gsub("\\IV"," ",names(CART_tree_large$variable.importance)))
@@ -725,7 +761,6 @@ large_tree_importance_final = rep(0,length(independent_variables))
 large_tree_importance_final[large_tree_ordered_drivers] <- large_tree_importance
 large_tree_importance_final <- large_tree_importance_final/max(abs(large_tree_importance_final))
 large_tree_importance_final <- large_tree_importance_final*sign(log_importance)
-#error here due to logistic regression failure/error. We dont have log_importance. Error: dims [product 91] do not match the length of object [95]
 
 Importance_table <- cbind(log_importance,tree_importance_final,large_tree_importance_final)
 colnames(Importance_table) <- c("Logistic Regression", "CART 1", "CART 2")
@@ -765,10 +800,25 @@ validation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(
 #confusionMatrix(ifelse(validation_Probability_class1_xgboost>0.5,1,0),validation_data[,dependent_variable]) #Display confusion matrix (needs caret package)
 test_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(test_data[,independent_variables]), type="response")
 
+#Optimizing the probability threshold to maximize profit
+theprofit_xgboost_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > i/100)
+  theprofit_xgboost <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_xgboost==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_xgboost==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_xgboost==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_xgboost==0)
+  if (theprofit_xgboost > theprofit_xgboost_max){
+    theprofit_xgboost_max <- theprofit_xgboost
+    Probability_Threshold_xgboost <- i/100
+  }
+}
+
 # Let's get the decision of xgboost for the 3 types of data 
-estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xgboost > Probability_Threshold)
-validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
-test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
+estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xgboost > Probability_Threshold_xgboost)
+validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold_xgboost)
+test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold_xgboost)
 
 Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
 rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
@@ -788,10 +838,26 @@ model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimat
  validation_Probability_class1_random_forest<-predict(model_forest, validation_data, type="response")
  test_Probability_class1_random_forest<-predict(model_forest, test_data, type="response")
 # 
+
+#Optimizing the probability threshold to maximize profit
+theprofit_random_forest_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > i/100)
+  theprofit_random_forest <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_random_forest==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_random_forest==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_random_forest==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_random_forest==0)
+  if (theprofit_random_forest > theprofit_random_forest_max){
+    theprofit_random_forest_max <- theprofit_random_forest
+    Probability_Threshold_random_forest <- i/100
+  }
+}
+ 
 # # Let's get the decision of the random forest for the 3 types of data 
- estimation_prediction_class_random_forest=1*as.vector(estimation_Probability_class1_random_forest > Probability_Threshold)
- validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold)
- test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold)
+ estimation_prediction_class_random_forest=1*as.vector(estimation_Probability_class1_random_forest > Probability_Threshold_random_forest)
+ validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold_random_forest)
+ test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold_random_forest)
 # 
  Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
  rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
@@ -813,10 +879,26 @@ model_svm <- svm(Bankrupt. ~., data=estimation_data, probability=TRUE)
  validation_Probability_class1_svm<-predict(model_svm, newdata=validation_data, type="response")
  test_Probability_class1_svm<-predict(model_svm, newdata=test_data, type="response")
 # 
+ 
+#Optimizing the probability threshold to maximize profit
+theprofit_svm_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > i/100)
+  theprofit_svm <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_svm==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_svm==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_svm==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_svm==0)
+  if (theprofit_svm > theprofit_svm_max){
+    theprofit_svm_max <- theprofit_svm
+    Probability_Threshold_svm <- i/100
+  }
+}
+
 # # Let's get the decision of the random forest for the 3 types of data 
- estimation_prediction_class_svm=1*as.vector(estimation_Probability_class1_svm > Probability_Threshold)
- validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold)
- test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold)
+ estimation_prediction_class_svm=1*as.vector(estimation_Probability_class1_svm > Probability_Threshold_svm)
+ validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold_svm)
+ test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold_svm)
 # 
  Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
  rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")

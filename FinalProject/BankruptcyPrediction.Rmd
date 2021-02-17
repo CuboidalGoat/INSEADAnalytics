@@ -121,7 +121,10 @@ dependent_variable = 1
 
 # Please ENTER the attributes to use as independent variables. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
-independent_variables = c(2:96) # use all the available attributes
+independent_variables = c(2:94,96) # use all the available attributes
+
+ProjectDataFactor <- ProjectData[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
 
 dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
 independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))

@@ -30,15 +30,6 @@ opts_chunk$set(echo=FALSE, fig.align="center", fig.width=10, fig.height=6.2)
 options(knitr.kable.NA = '')
 ```
 
-> Methods we are undertaking
-
-```{r}
-#1 means we are using this method, 0 means we are not using it
-XGBoost = 1
-Random_Forest = 1
-SVM = 1
-```
-
 >Scrubbing the Data Clean
 
 ```{r echo=FALSE, message=FALSE}
@@ -120,7 +111,10 @@ dependent_variable = 1
 
 # Please ENTER the attributes to use as independent variables. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
-independent_variables = c(2:96) # use all the available attributes
+independent_variables = c(2:93) # use all the available attributes
+
+ProjectDataFactor <- ProjectData[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
 
 dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
 independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
@@ -164,18 +158,124 @@ rownames(Profit_Matrix) <- c(paste("Actual 1 (", class_1_interpretation, ")", se
 
 # Please ENTER the maximum number of observations to show in the report and slides 
 # (DEFAULT is 50. If the number is large the report and slides may not be generated - very slow or will crash!!)
+
 max_data_report = 10 
 ```
 
+<<<<<<< HEAD
 ```{r echo=FALSE}
 thecor = round(cor(ProjectData),2)
 colnames(thecor)<-colnames(ProjectData)
 rownames(thecor)<-colnames(ProjectData)
 
 knitr::kable(round(thecor,2))
+||||||| 14fc622
+=======
+```{r}
+# Please ENTER the original raw attributes to use. 
+# Please use numbers, not column names, e.g. c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8
+factor_attributes_used = c(2:30)
+
+# Please ENTER the selection criteria for the factors to use. 
+# Choices: "eigenvalue", "variance", "manual"
+factor_selectionciterion = "manual"
+
+# Please ENTER the desired minimum variance explained 
+# (Only used in case "variance" is the factor selection criterion used). 
+minimum_variance_explained = 65  # between 1 and 100
+
+# Please ENTER the number of factors to use 
+# (Only used in case "manual" is the factor selection criterion used).
+manual_numb_factors_used = 6
+
+# Please ENTER the rotation eventually used (e.g. "none", "varimax", "quatimax", "promax", "oblimin", "simplimax", and "cluster" - see help(principal)). Default is "varimax"
+rotation_used = "varimax"
+
+MIN_VALUE = 0.5
+
+#1 means we are using this method, 0 means we are not using it
+XGBoost = 1
+Random_Forest = 1
+SVM = 1
 
 ```
 
+
+```{r}
+# Here is how the `principal` function is used 
+UnRotated_Results<-principal(ProjectDataFactor,nfactors=ncol(ProjectDataFactor), rotate="none",score=TRUE)
+UnRotated_Factors<-round(UnRotated_Results$loadings,2)
+UnRotated_Factors<-as.data.frame(unclass(UnRotated_Factors))
+colnames(UnRotated_Factors)<-paste("Comp",1:ncol(UnRotated_Factors),sep="")
+```
+
+```{r}
+# Here is how we use the `PCA` function 
+Variance_Explained_Table_results<-PCA(ProjectDataFactor, graph=FALSE)
+Variance_Explained_Table<-Variance_Explained_Table_results$eig
+Variance_Explained_Table_copy<-Variance_Explained_Table
+
+rownames(Variance_Explained_Table) <- paste("Component", 1:nrow(Variance_Explained_Table), sep=" ")
+colnames(Variance_Explained_Table) <- c("Eigenvalue", "Pct of explained variance", "Cumulative pct of explained variance")
+```
+
+```{r}
+iprint.df(round(Variance_Explained_Table, 2))
+write.csv(round(Variance_Explained_Table,2), file = "Variance_Explained_Table.csv")
+
+```
+
+```{r}
+eigenvalues  <- Variance_Explained_Table[, "Eigenvalue"]
+df           <- cbind(as.data.frame(eigenvalues), c(1:length(eigenvalues)), rep(1, length(eigenvalues)))
+colnames(df) <- c("eigenvalues", "components", "abline")
+iplot.df(melt(df, id="components"))
+```
+
+```{r}
+if (factor_selectionciterion == "eigenvalue")
+  factors_selected = sum(Variance_Explained_Table_copy[,1] >= 1)
+if (factor_selectionciterion == "variance")
+  factors_selected = 1:head(which(Variance_Explained_Table_copy[,"cumulative percentage of variance"]>= minimum_variance_explained),1)
+if (factor_selectionciterion == "manual")
+  factors_selected = manual_numb_factors_used
+```
+
+```{r}
+Rotated_Results<-principal(ProjectDataFactor, nfactors=max(factors_selected), rotate=rotation_used,score=TRUE)
+Rotated_Factors<-round(Rotated_Results$loadings,2)
+Rotated_Factors<-as.data.frame(unclass(Rotated_Factors))
+colnames(Rotated_Factors)<-paste("Comp.",1:ncol(Rotated_Factors),sep="")
+
+sorted_rows <- sort(Rotated_Factors[,1], decreasing = TRUE, index.return = TRUE)$ix
+Rotated_Factors <- Rotated_Factors[sorted_rows,]
+
+iprint.df(Rotated_Factors, scale=TRUE)
+write.csv(Rotated_Factors, file = "Rotated_Factors.csv")
+
+```
+
+
+```{r}
+Rotated_Factors_thres <- Rotated_Factors
+Rotated_Factors_thres[abs(Rotated_Factors_thres) < MIN_VALUE]<-NA
+colnames(Rotated_Factors_thres)<- colnames(Rotated_Factors)
+rownames(Rotated_Factors_thres)<- rownames(Rotated_Factors)
+
+iprint.df(Rotated_Factors_thres, scale=TRUE)
+write.csv(Rotated_Factors_thres, file = "Rotated_Factors_thres.csv")
+>>>>>>> xgboost_update
+
+```
+
+```{r}
+NEW_ProjectData <- round(Rotated_Results$scores[,1:factors_selected,drop=F],2)
+colnames(NEW_ProjectData)<-paste("DV (Factor)",1:ncol(NEW_ProjectData),sep=" ")
+
+iprint.df(t(head(NEW_ProjectData, 10)), scale=TRUE)
+write.csv(NEW_ProjectData, file = "FactorScores.csv")
+
+```
 <hr>\clearpage
 
 #TS

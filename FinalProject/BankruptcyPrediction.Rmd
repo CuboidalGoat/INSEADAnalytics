@@ -101,6 +101,13 @@ fixNAs<-function(data_frame){
 
 ProjectData<-fixNAs(ProjectData)
 ```
+```{r}
+#correlation check to check for leakage
+thecor = round(cor(ProjectData),2)
+iprint.df(round(thecor,2), scale=TRUE)
+write.csv(round(thecor,2), file = "thecor.csv")
+```
+
 
 ```{r echo=FALSE, message=FALSE}
 # We turn the data into data.matrix class so that we can easier manipulate it

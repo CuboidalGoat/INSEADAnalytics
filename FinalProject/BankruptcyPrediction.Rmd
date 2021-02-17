@@ -453,7 +453,7 @@ plot(crossval,xlim=c(-8,-4),ylim=c(0.22,0.26)) # lets zoom-in
 lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
 coef(lasso.opt.fit) #resulting model coefficients
 
-columns_to_include = c(2,4,6,16,21,23)
+columns_to_include = c(2,4,6,21,23)
 
 }
 ```

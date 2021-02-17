@@ -37,6 +37,9 @@ options(knitr.kable.NA = '')
 XGBoost = 1
 Random_Forest = 1
 SVM = 1
+PCA = 1
+Lasso = 1
+Plot_Eigenvalue_Curve = 0
 ```
 
 >Scrubbing the Data Clean
@@ -208,45 +211,52 @@ MIN_VALUE = 0.5
 
 ```{r}
 # Here is how the `principal` function is used 
+if(Plot_Eigenvalue_Curve){
 UnRotated_Results<-principal(ProjectDataFactor,nfactors=ncol(ProjectDataFactor), rotate="none",score=TRUE)
 UnRotated_Factors<-round(UnRotated_Results$loadings,2)
 UnRotated_Factors<-as.data.frame(unclass(UnRotated_Factors))
 colnames(UnRotated_Factors)<-paste("Comp",1:ncol(UnRotated_Factors),sep="")
+}
 ```
 
 ```{r}
 # Here is how we use the `PCA` function 
+if(Plot_Eigenvalue_Curve){
 Variance_Explained_Table_results<-PCA(ProjectDataFactor, graph=FALSE)
 Variance_Explained_Table<-Variance_Explained_Table_results$eig
 Variance_Explained_Table_copy<-Variance_Explained_Table
 
 rownames(Variance_Explained_Table) <- paste("Component", 1:nrow(Variance_Explained_Table), sep=" ")
 colnames(Variance_Explained_Table) <- c("Eigenvalue", "Pct of explained variance", "Cumulative pct of explained variance")
-```
 
-```{r}
 iprint.df(round(Variance_Explained_Table, 2))
 write.csv(round(Variance_Explained_Table,2), file = "Variance_Explained_Table.csv")
-
+}
 ```
 
+
 ```{r}
+if(Plot_Eigenvalue_Curve){
 eigenvalues  <- Variance_Explained_Table[, "Eigenvalue"]
 df           <- cbind(as.data.frame(eigenvalues), c(1:length(eigenvalues)), rep(1, length(eigenvalues)))
 colnames(df) <- c("eigenvalues", "components", "abline")
 iplot.df(melt(df, id="components"))
+}
 ```
 
 ```{r}
+if(PCA){
 if (factor_selectionciterion == "eigenvalue")
   factors_selected = sum(Variance_Explained_Table_copy[,1] >= 1)
 if (factor_selectionciterion == "variance")
   factors_selected = 1:head(which(Variance_Explained_Table_copy[,"cumulative percentage of variance"]>= minimum_variance_explained),1)
 if (factor_selectionciterion == "manual")
   factors_selected = manual_numb_factors_used
+}
 ```
 
 ```{r}
+if(PCA){
 Rotated_Results<-principal(ProjectDataFactor, nfactors=max(factors_selected), rotate=rotation_used,score=TRUE)
 Rotated_Factors<-round(Rotated_Results$loadings,2)
 Rotated_Factors<-as.data.frame(unclass(Rotated_Factors))
@@ -257,11 +267,13 @@ Rotated_Factors <- Rotated_Factors[sorted_rows,]
 
 iprint.df(Rotated_Factors, scale=TRUE)
 write.csv(Rotated_Factors, file = "Rotated_Factors.csv")
+}
 
 ```
 
 
 ```{r}
+if(PCA){
 Rotated_Factors_thres <- Rotated_Factors
 Rotated_Factors_thres[abs(Rotated_Factors_thres) < MIN_VALUE]<-NA
 colnames(Rotated_Factors_thres)<- colnames(Rotated_Factors)
@@ -269,46 +281,48 @@ rownames(Rotated_Factors_thres)<- rownames(Rotated_Factors)
 
 iprint.df(Rotated_Factors_thres, scale=TRUE)
 write.csv(Rotated_Factors_thres, file = "Rotated_Factors_thres.csv")
-
+}
 ```
 
 ```{r}
+if(PCA){
 NEW_ProjectData <- round(Rotated_Results$scores[,1:factors_selected,drop=F],2)
 colnames(NEW_ProjectData)<-paste("DV (Factor)",1:ncol(NEW_ProjectData),sep=" ")
 
 iprint.df(t(head(NEW_ProjectData, 10)), scale=TRUE)
 write.csv(NEW_ProjectData, file = "FactorScores.csv")
-
+}
 ```
 
+```{r echo=FALSE, message=FALSE}
+# We turn the data into data.matrix class so that we can easier manipulate it
+if(PCA){
+NEW_ProjectData_withB <- cbind(Bankrupt.=ProjectData[,c(1)],NEW_ProjectData)
+#NEW_ProjectData_withB <- data.matrix(NEW_ProjectData_withB)
+NEW_ProjectData_withB <- as.data.frame(NEW_ProjectData_withB)
 
-```{r echo=FALSE}
-###
-### With LASSO / Ridge
-###
+# Please ENTER the dependent variable (class).
+# Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
+# You need to make sure that dependent variable takes only two values: 0 and 1.
+dependent_variable = 1
 
-pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+# Please ENTER the attributes to use as independent variables. 
+# Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
+independent_variables = c(2:30) # use all the available attributes
 
-# create model matrices for training, validation, and new applicants
-x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
-x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
-x.test_data<-model.matrix(~. , data = test_data)[,-1]
+ProjectDataFactor <- NEW_ProjectData_withB[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
 
-#LASSO (alpha=1)
-lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$ Bankrupt, alpha = 1, family="binomial")
-plot(lasso.fit, xvar = "lambda")
+dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
+independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
 
-
-#selecting the best penalty lambda
-crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
-plot(crossval)
-penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
-log(penalty.lasso.min) #see where it was on the graph
-penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
-log(penalty.lasso.1se) #see where it was on the graph
-penalty.lasso <- penalty.lasso.1se
-#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
-plot(crossval,xlim=c(-8,-4),ylim=c(0.85,0.90)) # lets zoom-in
+if (length(unique(NEW_ProjectData_withB[,dependent_variable])) !=2){
+  cat("\n*****\n BE CAREFUL, THE DEPENDENT VARIABLE TAKES MORE THAN 2 VALUES")
+  cat("\nSplitting it around its median...\n*****\n ")
+  new_dependent = NEW_ProjectData_withB[,dependent_variable] >= median(NEW_ProjectData_withB[,dependent_variable])
+  NEW_ProjectData_withB[,dependent_variable] <- 1*new_dependent
+}
+}
 ```
 
 
@@ -342,21 +356,28 @@ While setting up the estimation and validation samples, you should also check th
 For simplicity, in this note we will not iterate steps 2-5. In practice, however, we should usually iterate steps 2-5 a number of times using the first validation sample each time, and at the end make our final assessment of the classification model using the test sample only once. 
 
 ```{r echo=FALSE}
+
+if(PCA){
+  Data_Used = NEW_ProjectData_withB
+}  else {
+  Data_Used = ProjectData
+}
+
 if (random_sampling){
-  estimation_data_ids=sample.int(nrow(ProjectData),floor(estimation_data_percent*nrow(ProjectData)/100))
-  non_estimation_data = setdiff(1:nrow(ProjectData),estimation_data_ids) #setdiff(x,y) returns the elements of x that are not in y
+  estimation_data_ids=sample.int(nrow(Data_Used),floor(estimation_data_percent*nrow(Data_Used)/100))
+  non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids) #setdiff(x,y) returns the elements of x that are not in y
   validation_data_ids=non_estimation_data[sample.int(length(non_estimation_data), floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))]
   } else {
-    estimation_data_ids=1:floor(estimation_data_percent*nrow(ProjectData)/100)
-    non_estimation_data = setdiff(1:nrow(ProjectData),estimation_data_ids)
+    estimation_data_ids=1:floor(estimation_data_percent*nrow(Data_Used)/100)
+    non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids)
     validation_data_ids = (tail(estimation_data_ids,1)+1):(tail(estimation_data_ids,1) + floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))
     }
 
-test_data_ids = setdiff(1:nrow(ProjectData), union(estimation_data_ids,validation_data_ids))
+test_data_ids = setdiff(1:nrow(Data_Used), union(estimation_data_ids,validation_data_ids))
 
-estimation_data=ProjectData[estimation_data_ids,]
-validation_data=ProjectData[validation_data_ids,]
-test_data=ProjectData[test_data_ids,]
+estimation_data=Data_Used[estimation_data_ids,]
+validation_data=Data_Used[validation_data_ids,]
+test_data=Data_Used[test_data_ids,]
 ```
 
 We typically refer to the three data samples as **estimation data** (`r estimation_data_percent`% of the data in our case), **validation data**  (`r validation_data_percent`% of the data) and **test data** (the remaining `r 100 - estimation_data_percent  -  validation_data_percent`% of the data).
@@ -445,6 +466,40 @@ set_swatch(swatch.default)
 *
 *
 
+```{r echo=FALSE}
+###
+### With LASSO / Ridge
+###
+if(Lasso){
+pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+
+# create model matrices for training, validation, and new applicants
+x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
+x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
+x.test_data<-model.matrix(~. , data = test_data)[,-1]
+
+#LASSO (alpha=1)
+lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial")
+plot(lasso.fit, xvar = "lambda")
+
+#selecting the best penalty lambda
+crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
+plot(crossval)
+penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso.min) #see where it was on the graph
+penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
+log(penalty.lasso.1se) #see where it was on the graph
+penalty.lasso <- penalty.lasso.1se
+#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
+plot(crossval,xlim=c(-8,-4),ylim=c(0.22,0.26)) # lets zoom-in
+
+#estimate the model with the optimal penalty
+lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
+coef(lasso.opt.fit) #resulting model coefficients
+
+}
+```
+
 
 ## Step 4: Classification and Interpretation
 Once we decide which  dependent and independent variables to use (which can be revisited in later iterations), one can use a number of classification methods to develop a model that discriminates the different classes. 
@@ -458,11 +513,8 @@ In this note we will consider for simplicity only two classification methods: **
 
 
 ```{r echo=FALSE}
-#estimate the model with the optimal penalty
-lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
-coef(lasso.opt.fit) #resulting model coefficients
 
-
+if(Lasso){
 # predicting the performance on the validation set
 lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
 write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
@@ -492,6 +544,7 @@ confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
 # predicting the performance on new applicants
 lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.prediction, family="binomial",type="response")
 write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_new_applicants.csv")
+}
 ```
 
 >>>>>>> 81c377952c09d4865a57ffc40526ee8ff8e669dd

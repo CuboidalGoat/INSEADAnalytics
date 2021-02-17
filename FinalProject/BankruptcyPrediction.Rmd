@@ -184,11 +184,11 @@ knitr::kable(round(thecor,2))
 ```{r}
 # Please ENTER the original raw attributes to use. 
 # Please use numbers, not column names, e.g. c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8
-factor_attributes_used = c(2:30)
+#factor_attributes_used = c(2:30)
 
 # Please ENTER the selection criteria for the factors to use. 
 # Choices: "eigenvalue", "variance", "manual"
-factor_selectionciterion = "manual"
+factor_selectionciterion = "eigenvalue"
 
 # Please ENTER the desired minimum variance explained 
 # (Only used in case "variance" is the factor selection criterion used). 
@@ -280,6 +280,37 @@ iprint.df(t(head(NEW_ProjectData, 10)), scale=TRUE)
 write.csv(NEW_ProjectData, file = "FactorScores.csv")
 
 ```
+
+
+```{r echo=FALSE}
+###
+### With LASSO / Ridge
+###
+
+pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+
+# create model matrices for training, validation, and new applicants
+x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
+x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
+x.test_data<-model.matrix(~. , data = test_data)[,-1]
+
+#LASSO (alpha=1)
+lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$ Bankrupt, alpha = 1, family="binomial")
+plot(lasso.fit, xvar = "lambda")
+
+
+#selecting the best penalty lambda
+crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
+plot(crossval)
+penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso.min) #see where it was on the graph
+penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
+log(penalty.lasso.1se) #see where it was on the graph
+penalty.lasso <- penalty.lasso.1se
+#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
+plot(crossval,xlim=c(-8,-4),ylim=c(0.85,0.90)) # lets zoom-in
+```
+
 
 <hr>\clearpage
 
@@ -424,34 +455,9 @@ In this note we will consider for simplicity only two classification methods: **
 
 <<<<<<< HEAD
 =======
+
+
 ```{r echo=FALSE}
-###
-### With LASSO / Ridge
-###
-
-pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
-
-# create model matrices for training, validation, and new applicants
-x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
-x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
-x.test_data<-model.matrix(~. , data = test_data)[,-1]
-
-#LASSO (alpha=1)
-lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$ Bankrupt, alpha = 1, family="binomial")
-plot(lasso.fit, xvar = "lambda")
-
-
-#selecting the best penalty lambda
-crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
-plot(crossval)
-penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
-log(penalty.lasso.min) #see where it was on the graph
-penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
-log(penalty.lasso.1se) #see where it was on the graph
-penalty.lasso <- penalty.lasso.1se
-#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
-plot(crossval,xlim=c(-8,-4),ylim=c(0.85,0.90)) # lets zoom-in
-
 #estimate the model with the optimal penalty
 lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
 coef(lasso.opt.fit) #resulting model coefficients

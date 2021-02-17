@@ -319,70 +319,6 @@ Once we decide which  dependent and independent variables to use (which can be r
 
 In this note we will consider for simplicity only two classification methods: **logistic regression** and **classification and regression trees (CART)**.
 
-```{r echo=FALSE}
-###
-### With LASSO / Ridge
-###
-
-pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
-
-# create model matrices for training, validation, and new applicants
-x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
-x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
-x.test_data<-model.matrix(~. , data = test_data)[,-1]
-
-#LASSO (alpha=1)
-lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$ Bankrupt, alpha = 1, family="binomial")
-plot(lasso.fit, xvar = "lambda")
-
-
-#selecting the best penalty lambda
-crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
-plot(crossval)
-penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
-log(penalty.lasso.min) #see where it was on the graph
-penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
-log(penalty.lasso.1se) #see where it was on the graph
-penalty.lasso <- penalty.lasso.1se
-#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
-plot(crossval,xlim=c(-8,-4),ylim=c(0.85,0.90)) # lets zoom-in
-
-#estimate the model with the optimal penalty
-lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
-coef(lasso.opt.fit) #resulting model coefficients
-
-
-# predicting the performance on the validation set
-lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
-write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
-
-lasso_classification<-rep("1",1000)
-lasso_classification[lasso_probabilities<0.3]="0" 
-lasso_classification<-as.factor(lasso_classification)
-
-####ROC Curve
-lasso_ROC_prediction <- prediction(lasso_probabilities, validation_data$Bankrupt.)
-lasso_ROC <- performance(lasso_ROC_prediction,"tpr","fpr") #Create ROC curve data
-plot(lasso_ROC) #Plot ROC curve
-
-####AUC (area under curve)
-auc.tmp <- performance(lasso_ROC_prediction,"auc") #Create AUC data
-lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-lasso_auc_validation #Display AUC value: 90+% - excellent, 80-90% - very good, 70-80% - good, 60-70% - so so, below 60% - not much value
-
-#### Lift chart
-plotLift(lasso_probabilities, validation$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
-
-###Confusion matrix  
-confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
-#Error: `data` and `reference` should be factors with the same levels.
-
-
-# predicting the performance on new applicants
-lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.prediction, family="binomial",type="response")
-write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_new_applicants.csv")
-```
-
 **Logistic Regression**: Logistic Regression is a method similar to linear regression except that the dependent variable is discrete (e.g., 0 or 1). **Linear** logistic regression estimates the coefficients of a linear model using the selected independent variables while optimizing a classification criterion. For example, this is the logistic regression parameters for our data:
 
 
@@ -395,8 +331,7 @@ test_data = data.frame(test_data)
 formula_log=paste(colnames(estimation_data[,dependent_variable,drop=F]),paste(Reduce(paste,sapply(head(independent_variables,-1), function(i) paste(colnames(estimation_data)[i],"+",sep=""))),colnames(estimation_data)[tail(independent_variables,1)],sep=""),sep="~") # When drop is FALSE, the dimensions of the object are kept. head(x,-1) returns all but the last element of x.
 
 logreg_solution <- glm(formula_log, family=binomial(link="logit"),  data=estimation_data)
-#error here: glm.fit: algorithm did not converge, glm.fit: fitted probabilities numerically 0 or 1 occurred
-
+#warning here: glm.fit: algorithm did not converge, glm.fit: fitted probabilities numerically 0 or 1 occurred
 
 log_coefficients <- round(summary(logreg_solution)$coefficients,1)
 
@@ -462,7 +397,7 @@ The leaves of the tree indicate the number of estimation data observations that 
 ```{r echo=FALSE}
 # Tree parameter
 # Please ENTER the new tree (CART) complexity control cp 
-CART_cp = 0.017
+CART_cp = 0.021
 ```
 
 One can estimate larger trees through changing the tree's **complexity control** parameter (in this case the rpart.control argument cp). For example, this is how the tree would look like if we set cp=`r toString(CART_cp)`:
@@ -549,6 +484,69 @@ knitr::kable(round(Importance_table,2))
 
 In general it is not necessary for all methods to agree on the most important drivers: when there is "major" disagreement, particularly among models that have satisfactory performance as discussed next, we may need to reconsider the overall analysis, including the objective of the analysis as well as the data used, as the results may not be robust. **As always, interpreting and using the results of data analytics requires a balance between quantitative and qualitative analysis.** 
 
+```{r echo=FALSE}
+###
+### With LASSO / Ridge
+###
+
+pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+
+# create model matrices for training, validation, and new applicants
+x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
+x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
+x.test_data<-model.matrix(~. , data = test_data)[,-1]
+
+#LASSO (alpha=1)
+lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$ Bankrupt, alpha = 1, family="binomial")
+plot(lasso.fit, xvar = "lambda")
+
+
+#selecting the best penalty lambda
+crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
+plot(crossval)
+penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso.min) #see where it was on the graph
+penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
+log(penalty.lasso.1se) #see where it was on the graph
+penalty.lasso <- penalty.lasso.1se
+#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
+plot(crossval,xlim=c(-8,-4),ylim=c(0.85,0.90)) # lets zoom-in
+
+#estimate the model with the optimal penalty
+lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
+coef(lasso.opt.fit) #resulting model coefficients
+
+
+# predicting the performance on the validation set
+lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
+write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
+
+lasso_classification<-rep("1",1000)
+lasso_classification[lasso_probabilities<0.3]="0" 
+lasso_classification<-as.factor(lasso_classification)
+
+####ROC Curve
+lasso_ROC_prediction <- prediction(lasso_probabilities, validation_data$Bankrupt.)
+lasso_ROC <- performance(lasso_ROC_prediction,"tpr","fpr") #Create ROC curve data
+plot(lasso_ROC) #Plot ROC curve
+
+####AUC (area under curve)
+auc.tmp <- performance(lasso_ROC_prediction,"auc") #Create AUC data
+lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+lasso_auc_validation #Display AUC value: 90+% - excellent, 80-90% - very good, 70-80% - good, 60-70% - so so, below 60% - not much value
+
+#### Lift chart
+plotLift(lasso_probabilities, validation$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
+
+###Confusion matrix  
+confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
+#Error: `data` and `reference` should be factors with the same levels.
+
+
+# predicting the performance on new applicants
+lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.prediction, family="binomial",type="response")
+write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_new_applicants.csv")
+```
 
 ```{r echo=FALSE}
 if (XGBoost){

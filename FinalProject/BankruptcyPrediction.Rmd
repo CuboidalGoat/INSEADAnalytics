@@ -539,6 +539,9 @@ lasso_classification<-rep("1",1000)
 lasso_classification[lasso_probabilities<0.3]="0" 
 lasso_classification<-as.factor(lasso_classification)
 
+# # Let's get the decision of the lasso regression for the 3 types of data 
+ validation_prediction_lasso_reg=1*as.vector(lasso_probabilities > 0.3)
+
 ####ROC Curve
 lasso_ROC_prediction <- prediction(lasso_probabilities, validation_data$Bankrupt.)
 lasso_ROC <- performance(lasso_ROC_prediction,"tpr","fpr") #Create ROC curve data
@@ -831,13 +834,15 @@ This is the percentage of the observations that have been correctly classified (
 
 ```{r echo=FALSE}
 validation_actual=validation_data[,dependent_variable]
-validation_predictions = rbind(validation_prediction_class_log,
+validation_predictions = rbind(validation_prediction_lasso_reg,
+                               validation_prediction_class_log,
                                validation_prediction_class_tree,
                                validation_prediction_class_tree_large,
                                validation_prediction_class_xgboost,
                                validation_prediction_class_random_forest,
                                validation_prediction_class_svm)
 validation_hit_rates = rbind(
+  100*sum(validation_prediction_lasso_reg==validation_actual)/length(validation_actual),
   100*sum(validation_prediction_class_log==validation_actual)/length(validation_actual),
   100*sum(validation_prediction_class_tree==validation_actual)/length(validation_actual), 
   100*sum(validation_prediction_class_tree_large==validation_actual)/length(validation_actual),
@@ -846,7 +851,7 @@ validation_hit_rates = rbind(
   100*sum(validation_prediction_class_svm==validation_actual)/length(validation_actual)
   )
 colnames(validation_hit_rates) <- "Hit Ratio"
-rownames(validation_hit_rates) <- c("Logistic Regression", "First CART", "Second CART","XGBoost","Random Forest","SVM")
+rownames(validation_hit_rates) <- c("Lasso Regression","Logistic Regression", "First CART", "Second CART","XGBoost","Random Forest","SVM")
 knitr::kable(validation_hit_rates)
 ```
 

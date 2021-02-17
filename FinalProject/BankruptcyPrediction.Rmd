@@ -1330,7 +1330,7 @@ res <- Reduce(cbind,lapply(xaxis, function(prob){
     Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
   c(100*length(useonly)/length(actual_class), theprofit) 
 }))
-frame5 <- data.frame(
+frame6 <- data.frame(
   `SVM % selected` = res[1,],
   `SVM est. profit` = res[2,],
   check.names = FALSE

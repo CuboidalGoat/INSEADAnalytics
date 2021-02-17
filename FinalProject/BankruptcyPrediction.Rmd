@@ -160,10 +160,10 @@ class_1_interpretation = "bankruptcy"
 class_0_interpretation = "no bankruptcy"
 
 # Please ENTER the profit/cost values for correctly classified and misclassified data:
-actual_1_predict_1 = 0
-actual_1_predict_0 = -100000
-actual_0_predict_1 = 0
-actual_0_predict_0 = 20000
+actual_1_predict_1 = 1
+actual_1_predict_0 = -0.0000
+actual_0_predict_1 = 0.9565
+actual_0_predict_0 = 1.0455
 
 Profit_Matrix = matrix(c(actual_1_predict_1, actual_0_predict_1, actual_1_predict_0, actual_0_predict_0), ncol=2)
 colnames(Profit_Matrix) <- c(paste("Predict 1 (", class_1_interpretation, ")", sep = ""), paste("Predict 0 (", class_0_interpretation, ")", sep = ""))

@@ -15,7 +15,7 @@ output:
 always_allow_html: yes
 ---
 
-<!-- **Note:** Assuming the working directory is "MYDIRECTORY/INSEADAnalytics" (where you have cloned the course material), you can create an html file by running in your console the command rmarkdown::render("CourseSessions/ClassificationProcessCreditCardDefault.Rmd") -->
+<!-- For compiling PDF File -->
 
 ```{r echo=FALSE, message=FALSE}
 make_pdf_file = 0 # SET THIS TO 1 IF WE COMPILE PDF FILE, 0 OTHERWISE (FOR HTML)
@@ -47,8 +47,8 @@ datafile_name = "./Data/data.csv"
 ProjectData <- read.csv(datafile_name)
 
 # Fixing incorrectly classified data types in training data:
-ProjectData$ Net.Income.Flag <- as.factor(ProjectData$ Net.Income.Flag)
-ProjectData$ Liability.Assets.Flag <- as.factor(ProjectData$ Liability.Assets.Flag)
+#ProjectData$ Net.Income.Flag <- as.factor(ProjectData$ Net.Income.Flag)
+#ProjectData$ Liability.Assets.Flag <- as.factor(ProjectData$ Liability.Assets.Flag)
 #ProjectData$ Bankrupt. <- factor(ProjectData$ Bankrupt.,levels = c(0,1))
 
 # Create a custom function to fix missing values ("NAs") and preserve the NA info as surrogate variables
@@ -142,8 +142,8 @@ CART_cp = 0.0025
 CART_control = rpart.control(cp = CART_cp)
 
 # Please ENTER the words for the business interpretation of class 1 and class 0:
-class_1_interpretation = "default"
-class_0_interpretation = "no default"
+class_1_interpretation = "bankruptcy"
+class_0_interpretation = "no bankruptcy"
 
 # Please ENTER the profit/cost values for correctly classified and misclassified data:
 actual_1_predict_1 = 0
@@ -301,7 +301,7 @@ Once we decide which  dependent and independent variables to use (which can be r
 
 > Some of the widely used classification methods are:  classification and regression trees (CART), boosted trees, support vector machines, neural networks, nearest neighbors, logistic regression, lasso, random forests, deep learning methods, etc.
 
-In this note we will consider for simplicity only two classification methods: **logistic regression** and **classification and regression trees (CART)**. However, replacing them with other methods is relatively simple (although some knowledge of how these methods work is often necessary - see the R help command for the methods if needed). Understanding how these methods work is beyond the scope of this note - there are many references available online for all these classification methods. 
+In this note we will consider for simplicity only two classification methods: **logistic regression** and **classification and regression trees (CART)**.
 
 **Logistic Regression**: Logistic Regression is a method similar to linear regression except that the dependent variable is discrete (e.g., 0 or 1). **Linear** logistic regression estimates the coefficients of a linear model using the selected independent variables while optimizing a classification criterion. For example, this is the logistic regression parameters for our data:
 
@@ -463,21 +463,98 @@ knitr::kable(round(Importance_table,2))
 In general it is not necessary for all methods to agree on the most important drivers: when there is "major" disagreement, particularly among models that have satisfactory performance as discussed next, we may need to reconsider the overall analysis, including the objective of the analysis as well as the data used, as the results may not be robust. **As always, interpreting and using the results of data analytics requires a balance between quantitative and qualitative analysis.** 
 
 
+```{r echo=FALSE}
+if (XGBoost){
+model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables]), 
+                         label = estimation_data[,dependent_variable], 
+                         eta = 0.3, 
+                         max_depth = 10, 
+                         nrounds=10, 
+                         objective = "binary:logistic", 
+                         verbose = 0)
+# eta: step size of each boosting step. max.depth: maximum depth of the tree. nrounds: the max number of iterations. We use the logistic regression as the objective. verbose=1 prints information about performance. Check https://www.rdocumentation.org/packages/xgboost/versions/0.4-4/topics/xgboost
+
+# # Alternative way of building the model, recommended when there are factors among the variables (xgboost does not accept factors as inputs, so need to use a design matrix):
+# formula_allvariables=paste(colnames(estimation_data[,dependent_variable,drop=F]),".",sep="~")
+# training.x <-model.matrix(as.formula(formula_allvariables), data = estimation_data)
+# testing.x <-model.matrix(as.formula(formula_allvariables), data = validation_data)
+# 
+# model_xgboost<-xgboost(data = data.matrix(training.x[,-1]), label = estimation_data[,dependent_variable], eta = 0.3, max_depth = 10, nround=10, objective = "binary:logistic", verbose = 1)
+# 
+# xgboost_prediction<-predict(model_xgboost,newdata=testing.x[,-1], type="response")
+# #confusionMatrix(ifelse(XGboost_prediction>0.5,1,0),validation_data$default.payment.next.month) #Display confusion matrix (needs caret package)
+
+
+# Let's get the probabilities for the 3 types of data from xgboost
+estimation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(estimation_data[,independent_variables]), type="response")
+validation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(validation_data[,independent_variables]), type="response")
+#confusionMatrix(ifelse(validation_Probability_class1_xgboost>0.5,1,0),validation_data[,dependent_variable]) #Display confusion matrix (needs caret package)
+test_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(test_data[,independent_variables]), type="response")
+
+# Let's get the decision of xgboost for the 3 types of data 
+estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xgboost > Probability_Threshold)
+validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
+test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
+
+Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
+rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```
+
+<!-- **Random Forest:** -->
+```{r echo=FALSE}
+if (Random_Forest){
+model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimation_data[,dependent_variable], importance=TRUE, proximity=TRUE, type="classification")
+# 
+# # Let's get the probabilities for the 3 types of data from the random forest
+ estimation_Probability_class1_random_forest<-predict(model_forest, estimation_data, type="response")
+ validation_Probability_class1_random_forest<-predict(model_forest, validation_data, type="response")
+ test_Probability_class1_random_forest<-predict(model_forest, test_data, type="response")
+# 
+# # Let's get the decision of the random forest for the 3 types of data 
+ estimation_prediction_class_random_forest=1*as.vector(estimation_Probability_class1_random_forest > Probability_Threshold)
+ validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold)
+ test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold)
+# 
+ Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
+ rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+# 
+ knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+ 
+}
+```
+<!-- **SVM:** -->
+```{r echo=FALSE}
+if (SVM){
+  pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+model_svm <- svm(Bankrupt. ~., data=estimation_data, probability=TRUE)
+
+# # Let's get the probabilities for the 3 types of data from the random forest
+ estimation_Probability_class1_svm<-predict(model_svm, newdata=estimation_data, type="response")
+ validation_Probability_class1_svm<-predict(model_svm, newdata=validation_data, type="response")
+ test_Probability_class1_svm<-predict(model_svm, newdata=test_data, type="response")
+# 
+# # Let's get the decision of the random forest for the 3 types of data 
+ estimation_prediction_class_svm=1*as.vector(estimation_Probability_class1_svm > Probability_Threshold)
+ validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold)
+ test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold)
+# 
+ Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
+ rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+# 
+ knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```
 
 ## Step 5: Validation accuracy
 Using the predicted class probabilities of the validation data, as outlined above, we can  generate some measures of classification performance. Before discussing them, note that given the probability an observation belongs to a class, **a reasonable class prediction choice is to predict the class that has the highest probability**. However, this does not need to be the only choice in practice.
 
 > Selecting the probability threshold based on which we predict the class of an observation is a decision the user needs to make. While in some cases a reasonable probability threshold is 50%, in other cases it may be 99.9% or 0.1%.
-
-**Question:**
-
-1. Can you think of such a scenario?
-2. What probability threshold do you think would make sense in this case of credit card default classification?
-
-**Answer:**
-
-*
-*
 
 For different choices of the probability threshold, one can measure a number of classification performance metrics, which are outlined next.
 
@@ -488,14 +565,20 @@ This is the percentage of the observations that have been correctly classified (
 validation_actual=validation_data[,dependent_variable]
 validation_predictions = rbind(validation_prediction_class_log,
                                validation_prediction_class_tree,
-                               validation_prediction_class_tree_large)
+                               validation_prediction_class_tree_large,
+                               validation_prediction_class_xgboost,
+                               validation_prediction_class_random_forest,
+                               validation_prediction_class_svm)
 validation_hit_rates = rbind(
   100*sum(validation_prediction_class_log==validation_actual)/length(validation_actual),
   100*sum(validation_prediction_class_tree==validation_actual)/length(validation_actual), 
-  100*sum(validation_prediction_class_tree_large==validation_actual)/length(validation_actual)
+  100*sum(validation_prediction_class_tree_large==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_xgboost==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_random_forest==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_svm==validation_actual)/length(validation_actual)
   )
 colnames(validation_hit_rates) <- "Hit Ratio"
-rownames(validation_hit_rates) <- c("Logistic Regression", "First CART", "Second CART")
+rownames(validation_hit_rates) <- c("Logistic Regression", "First CART", "Second CART","XGBoost","Random Forest","SVM")
 knitr::kable(validation_hit_rates)
 ```
 
@@ -504,14 +587,20 @@ For the estimation data, the hit rates are:
 estimation_actual=estimation_data[,dependent_variable]
 estimation_predictions = rbind(estimation_prediction_class_log,
                                estimation_prediction_class_tree,
-                               estimation_prediction_class_tree_large)
+                               estimation_prediction_class_tree_large,
+                               estimation_prediction_class_xgboost,
+                               estimation_prediction_class_random_forest,
+                               estimation_prediction_class_svm)
 estimation_hit_rates = rbind(
   100*sum(estimation_prediction_class_log==estimation_actual)/length(estimation_actual),
   100*sum(estimation_prediction_class_tree==estimation_actual)/length(estimation_actual), 
-  100*sum(estimation_prediction_class_tree_large==estimation_actual)/length(estimation_actual)
+  100*sum(estimation_prediction_class_tree_large==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_xgboost==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_random_forest==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_svm==estimation_actual)/length(estimation_actual)
   )
 colnames(estimation_hit_rates) <- "Hit Ratio"
-rownames(estimation_hit_rates) <- c("Logistic Regression","First CART", "Second CART")
+rownames(estimation_hit_rates) <- c("Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM")
 knitr::kable(estimation_hit_rates)
 ```
 
@@ -559,31 +648,53 @@ validation_actual_class <- as.numeric(validation_data[,dependent_variable])
 pred_tree <- prediction(validation_Probability_class1_tree, validation_actual_class)
 pred_tree_large <- prediction(validation_Probability_class1_tree_large, validation_actual_class)
 pred_log <- prediction(validation_Probability_class1_log, validation_actual_class)
+pred_xgboost <- prediction(validation_Probability_class1_xgboost, validation_actual_class)
+pred_random_forest <- prediction(validation_Probability_class1_random_forest, validation_actual_class)
+pred_svm <- prediction(validation_Probability_class1_svm, validation_actual_class)
 
 test1<-performance(pred_tree, "tpr", "fpr")
 df1<- cbind(as.data.frame(test1@x.values),as.data.frame(test1@y.values))
 colnames(df1) <- c("False Positive rate CART 1", "True Positive rate CART 1")
 plot1 <- ggplot(df1, aes(x=`False Positive rate CART 1`, y=`True Positive rate CART 1`)) + geom_line()
+
 test2<-performance(pred_log, "tpr", "fpr")
 df2<- cbind(as.data.frame(test2@x.values),as.data.frame(test2@y.values))
 colnames(df2) <- c("False Positive rate log reg", "True Positive rate log reg")
 plot2 <- ggplot(df2, aes(x=`False Positive rate log reg`, y=`True Positive rate log reg`)) + geom_line()
+
 test3<-performance(pred_tree_large, "tpr", "fpr")
 df3<- cbind(as.data.frame(test3@x.values),as.data.frame(test3@y.values))
 colnames(df3) <- c("False Positive rate CART 2", "True Positive rate CART 2")
 plot3 <- ggplot(df3, aes(x=`False Positive rate CART 2`, y=`True Positive rate CART 2`)) + geom_line()
 
+test4<-performance(pred_xgboost, "tpr", "fpr")
+df4<- cbind(as.data.frame(test4@x.values),as.data.frame(test4@y.values))
+colnames(df4) <- c("False Positive rate XGBoost", "True Positive rate XGBoost")
+plot4 <- ggplot(df4, aes(x=`False Positive rate XGBoost`, y=`True Positive rate XGBoost`)) + geom_line()
+
+test5<-performance(pred_random_forest, "tpr", "fpr")
+df5<- cbind(as.data.frame(test5@x.values),as.data.frame(test5@y.values))
+colnames(df5) <- c("False Positive rate Random Forest", "True Positive rate Random Forest")
+plot5 <- ggplot(df5, aes(x=`False Positive rate Random Forest`, y=`True Positive rate Random Forest`)) + geom_line()
+
+test6<-performance(pred_svm, "tpr", "fpr")
+df6<- cbind(as.data.frame(test6@x.values),as.data.frame(test6@y.values))
+colnames(df6) <- c("False Positive rate SVM", "True Positive rate SVM")
+plot6 <- ggplot(df6, aes(x=`False Positive rate SVM`, y=`True Positive rate SVM`)) + geom_line()
+
 # We can plot the curves individually 
 # grid.arrange(plot1, plot2, plot3)   # use `fig.height=7.5` for the grid plot
 
 # But we are going to combine them instead
-df.all <- do.call(rbind, lapply(list(df1, df2, df3), function(df) {
+df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6), function(df) {
   df <- melt(df, id=1)
   df$variable <- sub("True Positive rate ", "", df$variable)
   colnames(df)[1] <- "False Positive rate"
   df
 }))
+
 ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="blue")
+
 ```
 
 How should a good ROC curve look like? A rule of thumb in assessing ROC curves is that the "higher" the curve (i.e., the closer it gets to the point with coordinates (0,1)), hence the larger the area under the curve, the better. You may also select one point on the ROC curve (the "best one" for our purpose) and use that false positive/false negative performances (and corresponding threshold for P(1)) to assess your model. 
@@ -983,91 +1094,3 @@ ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + geo
 *
 *
 *
-
-```{r echo=FALSE}
-if (XGBoost){
-model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables]), 
-                         label = estimation_data[,dependent_variable], 
-                         eta = 0.3, 
-                         max_depth = 10, 
-                         nrounds=10, 
-                         objective = "binary:logistic", 
-                         verbose = 0)
-# eta: step size of each boosting step. max.depth: maximum depth of the tree. nrounds: the max number of iterations. We use the logistic regression as the objective. verbose=1 prints information about performance. Check https://www.rdocumentation.org/packages/xgboost/versions/0.4-4/topics/xgboost
-
-# # Alternative way of building the model, recommended when there are factors among the variables (xgboost does not accept factors as inputs, so need to use a design matrix):
-# formula_allvariables=paste(colnames(estimation_data[,dependent_variable,drop=F]),".",sep="~")
-# training.x <-model.matrix(as.formula(formula_allvariables), data = estimation_data)
-# testing.x <-model.matrix(as.formula(formula_allvariables), data = validation_data)
-# 
-# model_xgboost<-xgboost(data = data.matrix(training.x[,-1]), label = estimation_data[,dependent_variable], eta = 0.3, max_depth = 10, nround=10, objective = "binary:logistic", verbose = 1)
-# 
-# xgboost_prediction<-predict(model_xgboost,newdata=testing.x[,-1], type="response")
-# #confusionMatrix(ifelse(XGboost_prediction>0.5,1,0),validation_data$default.payment.next.month) #Display confusion matrix (needs caret package)
-
-
-# Let's get the probabilities for the 3 types of data from xgboost
-estimation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(estimation_data[,independent_variables]), type="response")
-validation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(validation_data[,independent_variables]), type="response")
-#confusionMatrix(ifelse(validation_Probability_class1_xgboost>0.5,1,0),validation_data[,dependent_variable]) #Display confusion matrix (needs caret package)
-test_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(test_data[,independent_variables]), type="response")
-
-# Let's get the decision of xgboost for the 3 types of data 
-estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xgboost > Probability_Threshold)
-validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
-test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold)
-
-Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
-rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
-
-knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
-}
-```
-
-<!-- **Random Forest:** -->
-```{r echo=FALSE}
-if (Random_Forest){
-model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimation_data[,dependent_variable], importance=TRUE, proximity=TRUE, type="classification")
-# 
-# # Let's get the probabilities for the 3 types of data from the random forest
- estimation_Probability_class1_random_forest<-predict(model_forest, estimation_data, type="response")
- validation_Probability_class1_random_forest<-predict(model_forest, validation_data, type="response")
- test_Probability_class1_random_forest<-predict(model_forest, test_data, type="response")
-# 
-# # Let's get the decision of the random forest for the 3 types of data 
- estimation_prediction_class_random_forest=1*as.vector(estimation_Probability_class1_random_forest > Probability_Threshold)
- validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold)
- test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold)
-# 
- Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
- rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
- colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
-# 
- knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
- 
-}
-```
-<!-- **SVM:** -->
-```{r echo=FALSE}
-if (SVM){
-  pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
-model_svm <- svm(Bankrupt. ~., data=estimation_data, probability=TRUE)
-
-# # Let's get the probabilities for the 3 types of data from the random forest
- estimation_Probability_class1_svm<-predict(model_svm, newdata=estimation_data, type="response")
- validation_Probability_class1_svm<-predict(model_svm, newdata=validation_data, type="response")
- test_Probability_class1_svm<-predict(model_svm, newdata=test_data, type="response")
-# 
-# # Let's get the decision of the random forest for the 3 types of data 
- estimation_prediction_class_svm=1*as.vector(estimation_Probability_class1_svm > Probability_Threshold)
- validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold)
- test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold)
-# 
- Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
- rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
- colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
-# 
- knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
-}
-```

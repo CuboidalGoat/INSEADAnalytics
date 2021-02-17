@@ -504,7 +504,7 @@ columns_to_include = c(2,4,6,16,21,23)
 
 ```{r echo=FALSE, message=FALSE}
 # We turn the data into data.matrix class so that we can easier manipulate it
-if(Lasso+PCA){
+if(Lasso*PCA){
 NEW_ProjectData_withB_Lasso <- cbind(Bankrupt.=ProjectData[,c(1)],NEW_ProjectData_withB[,columns_to_include])
 #NEW_ProjectData_withB <- data.matrix(NEW_ProjectData_withB)
 #NEW_ProjectData_withB_Lasso <- as.data.frame(NEW_ProjectData_withB)
@@ -535,7 +535,7 @@ if (length(unique(NEW_ProjectData_withB_Lasso[,dependent_variable])) !=2){
 
 ```{r echo=FALSE}
 
-if(Lasso+PCA){
+if(Lasso*PCA){
   Data_Used = NEW_ProjectData_withB_Lasso
 }  else if (PCA){
   Data_Used = NEW_ProjectData_withB

@@ -1048,3 +1048,26 @@ model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimat
  
 }
 ```
+<!-- **SVM:** -->
+```{r echo=FALSE}
+if (SVM){
+  pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+model_svm <- svm(Bankrupt. ~., data=estimation_data, probability=TRUE)
+
+# # Let's get the probabilities for the 3 types of data from the random forest
+ estimation_Probability_class1_svm<-predict(model_svm, newdata=estimation_data, type="response")
+ validation_Probability_class1_svm<-predict(model_svm, newdata=validation_data, type="response")
+ test_Probability_class1_svm<-predict(model_svm, newdata=test_data, type="response")
+# 
+# # Let's get the decision of the random forest for the 3 types of data 
+ estimation_prediction_class_svm=1*as.vector(estimation_Probability_class1_svm > Probability_Threshold)
+ validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold)
+ test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold)
+# 
+ Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
+ rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+# 
+ knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```

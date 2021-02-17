@@ -121,7 +121,10 @@ dependent_variable = 1
 
 # Please ENTER the attributes to use as independent variables. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
-independent_variables = c(2:96) # use all the available attributes
+independent_variables = c(2:94,96) # use all the available attributes
+
+ProjectDataFactor <- ProjectData[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
 
 dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
 independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
@@ -175,6 +178,106 @@ colnames(thecor)<-colnames(ProjectData)
 rownames(thecor)<-colnames(ProjectData)
 
 knitr::kable(round(thecor,2))
+
+```
+
+```{r}
+# Please ENTER the original raw attributes to use. 
+# Please use numbers, not column names, e.g. c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8
+factor_attributes_used = c(2:30)
+
+# Please ENTER the selection criteria for the factors to use. 
+# Choices: "eigenvalue", "variance", "manual"
+factor_selectionciterion = "manual"
+
+# Please ENTER the desired minimum variance explained 
+# (Only used in case "variance" is the factor selection criterion used). 
+minimum_variance_explained = 65  # between 1 and 100
+
+# Please ENTER the number of factors to use 
+# (Only used in case "manual" is the factor selection criterion used).
+manual_numb_factors_used = 6
+
+# Please ENTER the rotation eventually used (e.g. "none", "varimax", "quatimax", "promax", "oblimin", "simplimax", and "cluster" - see help(principal)). Default is "varimax"
+rotation_used = "varimax"
+
+MIN_VALUE = 0.5
+
+```
+
+
+```{r}
+# Here is how the `principal` function is used 
+UnRotated_Results<-principal(ProjectDataFactor,nfactors=ncol(ProjectDataFactor), rotate="none",score=TRUE)
+UnRotated_Factors<-round(UnRotated_Results$loadings,2)
+UnRotated_Factors<-as.data.frame(unclass(UnRotated_Factors))
+colnames(UnRotated_Factors)<-paste("Comp",1:ncol(UnRotated_Factors),sep="")
+```
+
+```{r}
+# Here is how we use the `PCA` function 
+Variance_Explained_Table_results<-PCA(ProjectDataFactor, graph=FALSE)
+Variance_Explained_Table<-Variance_Explained_Table_results$eig
+Variance_Explained_Table_copy<-Variance_Explained_Table
+
+rownames(Variance_Explained_Table) <- paste("Component", 1:nrow(Variance_Explained_Table), sep=" ")
+colnames(Variance_Explained_Table) <- c("Eigenvalue", "Pct of explained variance", "Cumulative pct of explained variance")
+```
+
+```{r}
+iprint.df(round(Variance_Explained_Table, 2))
+write.csv(round(Variance_Explained_Table,2), file = "Variance_Explained_Table.csv")
+
+```
+
+```{r}
+eigenvalues  <- Variance_Explained_Table[, "Eigenvalue"]
+df           <- cbind(as.data.frame(eigenvalues), c(1:length(eigenvalues)), rep(1, length(eigenvalues)))
+colnames(df) <- c("eigenvalues", "components", "abline")
+iplot.df(melt(df, id="components"))
+```
+
+```{r}
+if (factor_selectionciterion == "eigenvalue")
+  factors_selected = sum(Variance_Explained_Table_copy[,1] >= 1)
+if (factor_selectionciterion == "variance")
+  factors_selected = 1:head(which(Variance_Explained_Table_copy[,"cumulative percentage of variance"]>= minimum_variance_explained),1)
+if (factor_selectionciterion == "manual")
+  factors_selected = manual_numb_factors_used
+```
+
+```{r}
+Rotated_Results<-principal(ProjectDataFactor, nfactors=max(factors_selected), rotate=rotation_used,score=TRUE)
+Rotated_Factors<-round(Rotated_Results$loadings,2)
+Rotated_Factors<-as.data.frame(unclass(Rotated_Factors))
+colnames(Rotated_Factors)<-paste("Comp.",1:ncol(Rotated_Factors),sep="")
+
+sorted_rows <- sort(Rotated_Factors[,1], decreasing = TRUE, index.return = TRUE)$ix
+Rotated_Factors <- Rotated_Factors[sorted_rows,]
+
+iprint.df(Rotated_Factors, scale=TRUE)
+write.csv(Rotated_Factors, file = "Rotated_Factors.csv")
+
+```
+
+
+```{r}
+Rotated_Factors_thres <- Rotated_Factors
+Rotated_Factors_thres[abs(Rotated_Factors_thres) < MIN_VALUE]<-NA
+colnames(Rotated_Factors_thres)<- colnames(Rotated_Factors)
+rownames(Rotated_Factors_thres)<- rownames(Rotated_Factors)
+
+iprint.df(Rotated_Factors_thres, scale=TRUE)
+write.csv(Rotated_Factors_thres, file = "Rotated_Factors_thres.csv")
+
+```
+
+```{r}
+NEW_ProjectData <- round(Rotated_Results$scores[,1:factors_selected,drop=F],2)
+colnames(NEW_ProjectData)<-paste("DV (Factor)",1:ncol(NEW_ProjectData),sep=" ")
+
+iprint.df(t(head(NEW_ProjectData, 10)), scale=TRUE)
+write.csv(NEW_ProjectData, file = "FactorScores.csv")
 
 ```
 
@@ -319,6 +422,73 @@ Once we decide which  dependent and independent variables to use (which can be r
 
 In this note we will consider for simplicity only two classification methods: **logistic regression** and **classification and regression trees (CART)**.
 
+<<<<<<< HEAD
+=======
+```{r echo=FALSE}
+###
+### With LASSO / Ridge
+###
+
+pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+
+# create model matrices for training, validation, and new applicants
+x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
+x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
+x.test_data<-model.matrix(~. , data = test_data)[,-1]
+
+#LASSO (alpha=1)
+lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$ Bankrupt, alpha = 1, family="binomial")
+plot(lasso.fit, xvar = "lambda")
+
+
+#selecting the best penalty lambda
+crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
+plot(crossval)
+penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso.min) #see where it was on the graph
+penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
+log(penalty.lasso.1se) #see where it was on the graph
+penalty.lasso <- penalty.lasso.1se
+#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
+plot(crossval,xlim=c(-8,-4),ylim=c(0.85,0.90)) # lets zoom-in
+
+#estimate the model with the optimal penalty
+lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
+coef(lasso.opt.fit) #resulting model coefficients
+
+
+# predicting the performance on the validation set
+lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
+write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
+
+lasso_classification<-rep("1",1000)
+lasso_classification[lasso_probabilities<0.3]="0" 
+lasso_classification<-as.factor(lasso_classification)
+
+####ROC Curve
+lasso_ROC_prediction <- prediction(lasso_probabilities, validation_data$Bankrupt.)
+lasso_ROC <- performance(lasso_ROC_prediction,"tpr","fpr") #Create ROC curve data
+plot(lasso_ROC) #Plot ROC curve
+
+####AUC (area under curve)
+auc.tmp <- performance(lasso_ROC_prediction,"auc") #Create AUC data
+lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+lasso_auc_validation #Display AUC value: 90+% - excellent, 80-90% - very good, 70-80% - good, 60-70% - so so, below 60% - not much value
+
+#### Lift chart
+plotLift(lasso_probabilities, validation$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
+
+###Confusion matrix  
+confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
+#Error: `data` and `reference` should be factors with the same levels.
+
+
+# predicting the performance on new applicants
+lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.prediction, family="binomial",type="response")
+write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_new_applicants.csv")
+```
+
+>>>>>>> 81c377952c09d4865a57ffc40526ee8ff8e669dd
 **Logistic Regression**: Logistic Regression is a method similar to linear regression except that the dependent variable is discrete (e.g., 0 or 1). **Linear** logistic regression estimates the coefficients of a linear model using the selected independent variables while optimizing a classification criterion. For example, this is the logistic regression parameters for our data:
 
 

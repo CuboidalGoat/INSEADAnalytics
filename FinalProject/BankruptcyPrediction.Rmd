@@ -313,8 +313,8 @@ independent_variables = c(2:30) # use all the available attributes
 ProjectDataFactor <- NEW_ProjectData_withB[,independent_variables]
 ProjectDataFactor <- data.matrix(ProjectDataFactor)
 
-dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
-independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
+dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(NEW_ProjectData_withB), max(i,1))))
+independent_variables = unique(sapply(independent_variables,function(i) min(ncol(NEW_ProjectData_withB), max(i,1))))
 
 if (length(unique(NEW_ProjectData_withB[,dependent_variable])) !=2){
   cat("\n*****\n BE CAREFUL, THE DEPENDENT VARIABLE TAKES MORE THAN 2 VALUES")
@@ -497,7 +497,67 @@ plot(crossval,xlim=c(-8,-4),ylim=c(0.22,0.26)) # lets zoom-in
 lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
 coef(lasso.opt.fit) #resulting model coefficients
 
+columns_to_include = c(2,4,6,16,21,23)
+
 }
+```
+
+```{r echo=FALSE, message=FALSE}
+# We turn the data into data.matrix class so that we can easier manipulate it
+if(Lasso+PCA){
+NEW_ProjectData_withB_Lasso <- cbind(Bankrupt.=ProjectData[,c(1)],NEW_ProjectData_withB[,columns_to_include])
+#NEW_ProjectData_withB <- data.matrix(NEW_ProjectData_withB)
+#NEW_ProjectData_withB_Lasso <- as.data.frame(NEW_ProjectData_withB)
+
+# Please ENTER the dependent variable (class).
+# Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
+# You need to make sure that dependent variable takes only two values: 0 and 1.
+dependent_variable = 1
+
+# Please ENTER the attributes to use as independent variables. 
+# Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
+independent_variables = c(2:7) # use all the available attributes
+
+ProjectDataFactor <- NEW_ProjectData_withB_Lasso[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
+
+dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(NEW_ProjectData_withB_Lasso), max(i,1))))
+independent_variables = unique(sapply(independent_variables,function(i) min(ncol(NEW_ProjectData_withB_Lasso), max(i,1))))
+
+if (length(unique(NEW_ProjectData_withB_Lasso[,dependent_variable])) !=2){
+  cat("\n*****\n BE CAREFUL, THE DEPENDENT VARIABLE TAKES MORE THAN 2 VALUES")
+  cat("\nSplitting it around its median...\n*****\n ")
+  new_dependent = NEW_ProjectData_withB_Lasso[,dependent_variable] >= median(NEW_ProjectData_withB_Lasso[,dependent_variable])
+  NEW_ProjectData_withB_Lasso[,dependent_variable] <- 1*new_dependent
+}
+}
+```
+
+```{r echo=FALSE}
+
+if(Lasso+PCA){
+  Data_Used = NEW_ProjectData_withB_Lasso
+}  else if (PCA){
+  Data_Used = NEW_ProjectData_withB
+} else {
+  Data_Used = ProjectData
+}
+
+if (random_sampling){
+  estimation_data_ids=sample.int(nrow(Data_Used),floor(estimation_data_percent*nrow(Data_Used)/100))
+  non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids) #setdiff(x,y) returns the elements of x that are not in y
+  validation_data_ids=non_estimation_data[sample.int(length(non_estimation_data), floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))]
+  } else {
+    estimation_data_ids=1:floor(estimation_data_percent*nrow(Data_Used)/100)
+    non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids)
+    validation_data_ids = (tail(estimation_data_ids,1)+1):(tail(estimation_data_ids,1) + floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))
+    }
+
+test_data_ids = setdiff(1:nrow(Data_Used), union(estimation_data_ids,validation_data_ids))
+
+estimation_data=Data_Used[estimation_data_ids,]
+validation_data=Data_Used[validation_data_ids,]
+test_data=Data_Used[test_data_ids,]
 ```
 
 

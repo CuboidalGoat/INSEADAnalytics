@@ -278,7 +278,6 @@ A simple visualization tool to assess the discriminatory power of the independen
 # Please ENTER the selected independent variables for which to draw box plots. 
 # Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
 boxplots_independent_variables = c(34:42) # use only the PAY_ variables
-
 #why c(34:42)?
 
 DVvalues = unique(estimation_data[,dependent_variable])
@@ -361,9 +360,6 @@ lasso_classification<-rep("1",1000)
 lasso_classification[lasso_probabilities<0.3]="0" 
 lasso_classification<-as.factor(lasso_classification)
 
-###Confusion matrix  
-confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
-
 ####ROC Curve
 lasso_ROC_prediction <- prediction(lasso_probabilities, validation_data$Bankrupt.)
 lasso_ROC <- performance(lasso_ROC_prediction,"tpr","fpr") #Create ROC curve data
@@ -376,6 +372,10 @@ lasso_auc_validation #Display AUC value: 90+% - excellent, 80-90% - very good, 7
 
 #### Lift chart
 plotLift(lasso_probabilities, validation$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
+
+###Confusion matrix  
+confusionMatrix(lasso_classification,validation_data$Bankrupt.,positive = "1")
+#Error: `data` and `reference` should be factors with the same levels.
 
 
 # predicting the performance on new applicants

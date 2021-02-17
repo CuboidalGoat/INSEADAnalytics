@@ -463,7 +463,7 @@ columns_to_include = c(2,4,6,21,23)
 if(Lasso*PCA){
 NEW_ProjectData_withB_Lasso <- cbind(Bankrupt.=ProjectData[,c(1)],NEW_ProjectData_withB[,columns_to_include])
 #NEW_ProjectData_withB <- data.matrix(NEW_ProjectData_withB)
-NEW_ProjectData_withB_Lasso <- as.data.frame(NEW_ProjectData_withB)
+NEW_ProjectData_withB_Lasso <- as.data.frame(NEW_ProjectData_withB_Lasso)
 
 # Please ENTER the dependent variable (class).
 # Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.

@@ -550,9 +550,7 @@ knitr::kable(head(t(round(Classification_Table_lasso,2)), max_data_report)) #t(x
 }
 ```
 
->>>>>>> 81c377952c09d4865a57ffc40526ee8ff8e669dd
-**Logistic Regression**: Logistic Regression is a method similar to linear regression except that the dependent variable is discrete (e.g., 0 or 1). **Linear** logistic regression estimates the coefficients of a linear model using the selected independent variables while optimizing a classification criterion. For example, this is the logistic regression parameters for our data:
-
+**Logistic Regression**: 
 
 ```{r echo=FALSE}
 # We first turn the data into data.frame's

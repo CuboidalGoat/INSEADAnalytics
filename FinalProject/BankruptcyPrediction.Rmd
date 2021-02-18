@@ -40,6 +40,7 @@ SVM = 1
 PCA = 1
 Lasso = 1
 Plot_Eigenvalue_Curve = 1
+crowd = 5
 ```
 
 >Scrubbing the Data Clean
@@ -1274,13 +1275,26 @@ Let's see in our case how the **hit ratio, confusion matrix, ROC curve, gains ch
 ```{r echo=FALSE}
 ######for test data#####
 test_actual=test_data[,dependent_variable]
+
+sum_test_all_methods = test_prediction_class_lasso+
+                         test_prediction_class_log+
+                         test_prediction_class_tree+
+                         test_prediction_class_tree_large+
+                         test_prediction_class_xgboost+
+                         test_prediction_class_random_forest+
+                         test_prediction_class_svm
+
+sum_test_all_methods[sum_test_all_methods<crowd] <- 0
+sum_test_all_methods[sum_test_all_methods>=crowd] <- 1
+
 test_predictions = rbind(test_prediction_class_lasso,
                          test_prediction_class_log,
                          test_prediction_class_tree,
                          test_prediction_class_tree_large,
                          test_prediction_class_xgboost,
                          test_prediction_class_random_forest,
-                         test_prediction_class_svm)
+                         test_prediction_class_svm,
+                         sum_test_all_methods)
 test_hit_rates = rbind(
   100*sum(test_prediction_class_lasso==test_actual)/length(test_actual),
   100*sum(test_prediction_class_log==test_actual)/length(test_actual),
@@ -1288,10 +1302,11 @@ test_hit_rates = rbind(
   100*sum(test_prediction_class_tree_large==test_actual)/length(test_actual),
   100*sum(test_prediction_class_xgboost==test_actual)/length(test_actual),
   100*sum(test_prediction_class_random_forest==test_actual)/length(test_actual),
-  100*sum(test_prediction_class_svm==test_actual)/length(test_actual)
+  100*sum(test_prediction_class_svm==test_actual)/length(test_actual),
+  100*sum(sum_test_all_methods==test_actual)/length(test_actual)
   )
 colnames(test_hit_rates) <- "Hit Ratio"
-rownames(test_hit_rates) <- c("Lasso Regression", "Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM")
+rownames(test_hit_rates) <- c("Lasso Regression", "Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM","Majority_Vote")
 
 knitr::kable(test_hit_rates)
 ```
@@ -1387,6 +1402,14 @@ conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variabl
 conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
 conf_matrix = round(conf_matrix,2)
 
+test_prediction_best = test_predictions[8,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
 colnames(conf_matrix) <- c(paste("SVM Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Predicted 0 (", class_0_interpretation, ")", sep = ""))
 rownames(conf_matrix) <- c(paste("SVM Actual 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Actual 0 (", class_0_interpretation, ")", sep = ""))
 knitr::kable(conf_matrix)
@@ -1404,6 +1427,7 @@ pred_xgboost_test <- prediction(test_Probability_class1_xgboost, test_actual_cla
 pred_random_forest_test <- prediction(test_Probability_class1_random_forest, test_actual_class)
 pred_svm_test <- prediction(test_Probability_class1_svm, test_actual_class)
 pred_lasso_test <- prediction(test_Probability_lasso, test_actual_class)
+pred_majority_test <- prediction(sum_test_all_methods, test_actual_class)
 
 test<-performance(pred_tree_test, "tpr", "fpr")
 df1<- cbind(as.data.frame(test@x.values),as.data.frame(test@y.values))
@@ -1437,14 +1461,19 @@ df7<- cbind(as.data.frame(test7@x.values),as.data.frame(test7@y.values))
 colnames(df7) <- c("False Positive rate Lasso", "True Positive rate Lasso")
 plot7 <- ggplot(df7, aes(x=`False Positive rate lasso`, y=`True Positive rate lasso`)) + geom_line()
 
-df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7), function(df) {
+test8<-performance(pred_majority_test, "tpr", "fpr")
+df8<- cbind(as.data.frame(test8@x.values),as.data.frame(test8@y.values))
+colnames(df8) <- c("False Positive rate Majority", "True Positive rate Majority")
+plot8 <- ggplot(df8, aes(x=`False Positive rate Majority`, y=`True Positive rate Majority`)) + geom_line()
+
+df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7, df8), function(df) {
   df <- melt(df, id=1)
   df$variable <- sub("True Positive ", "", df$variable)
   colnames(df)[1] <- "False Positive rate"
   df
 }))
 #ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
-ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red", "green")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
 AUC for the test data:
 
@@ -1471,7 +1500,11 @@ svm_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
 auc.tmp <- performance(pred_lasso_test,"auc") #Create AUC data
 lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
 
-AUC_table = matrix(rep(0,7),ncol=1)
+auc.tmp <- performance(pred_majority_test,"auc") #Create AUC data
+majority_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+
+
+AUC_table = matrix(rep(0,8),ncol=1)
 AUC_table[1,1]<- tree_auc_validation
 AUC_table[2,1]<- large_tree_auc_validation
 AUC_table[3,1]<- log_auc_validation
@@ -1479,9 +1512,10 @@ AUC_table[4,1]<- xgboost_auc_validation
 AUC_table[5,1]<- random_forest_auc_validation
 AUC_table[6,1]<- svm_auc_validation
 AUC_table[7,1]<- lasso_auc_validation
+AUC_table[8,1]<- majority_auc_validation
 
 colnames(AUC_table) <- c(paste("AUC"))
-rownames(AUC_table) <- c(paste("Ctree"), paste("Rpart"),paste("Log"),paste("Xgboost"),paste("Random Forest"),paste("SVM"),paste("Lasso"))
+rownames(AUC_table) <- c(paste("Ctree"), paste("Rpart"),paste("Log"),paste("Xgboost"),paste("Random Forest"),paste("SVM"),paste("Lasso"),paste("Majority"))
 knitr::kable(AUC_table)
 ```
 
@@ -1609,12 +1643,30 @@ frame7 <- data.frame(
   check.names = FALSE
 )
 
-df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6, frame7), function(df) {
+probs <- sum_test_all_methods
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame8 <- data.frame(
+  `Majority % selected` = res[1,],
+  `Majority est. profit` = res[2,],
+  check.names = FALSE
+)
+
+
+df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6, frame7, frame8), function(df) {
   df <- melt(df, id=1)
   df$variable <- sub(" est. profit", "", df$variable)
   colnames(df)[1] <- "% of test data selected"
   df
 }))
 #ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + geom_line() + ylab("Estimated profit")
-ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red","green")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```

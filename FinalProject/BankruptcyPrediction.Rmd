@@ -603,6 +603,9 @@ Classification_Table_log=rbind(validation_data[,dependent_variable],validation_p
 rownames(Classification_Table_log)<-c("Actual Class","Predicted Class","Probability of Class 1")
 colnames(Classification_Table_log)<- paste("Obs", 1:ncol(Classification_Table_log), sep=" ")
 
+write.csv(test_Probability_class1_log, file="test_Probability_class1_log.csv")
+write.csv(test_data[,dependent_variable], file="test_actualdata.csv")
+
 knitr::kable(head(t(round(Classification_Table_log,2)), max_data_report)) #t(x) returns the transpose of x
 ```
 
@@ -1021,7 +1024,7 @@ colnames(conf_matrix) <- c(paste("Rforest Predicted 1 (", class_1_interpretation
 rownames(conf_matrix) <- c(paste("Rforest Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Actual 0 (", class_0_interpretation, ")", sep = ""))
 knitr::kable(conf_matrix)
 
-validation_prediction_best = validation_predictions[6,]
+validation_prediction_best = validation_predictions[7,]
 conf_matrix = matrix(rep(0,4),ncol=2)
 conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
 conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
@@ -1445,42 +1448,43 @@ df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7), functio
 #ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
+AUC for the test data:
+
 ```{r echo=FALSE}
 
 auc.tmp <- performance(pred_tree_test,"auc") #Create AUC data
 tree_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("Ctree")
-print(tree_auc_validation)
 
 auc.tmp <- performance(pred_tree_large_test,"auc") #Create AUC data
 large_tree_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("Rpart")
-print(large_tree_auc_validation)
 
 auc.tmp <- performance(pred_log_test,"auc") #Create AUC data
 log_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("Log")
-print(log_auc_validation)
 
 auc.tmp <- performance(pred_xgboost_test,"auc") #Create AUC data
 xgboost_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("Xgboost")
-print(xgboost_auc_validation)
 
 auc.tmp <- performance(pred_random_forest_test,"auc") #Create AUC data
 random_forest_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("Random Forest")
-print(random_forest_auc_validation)
 
 auc.tmp <- performance(pred_svm_test,"auc") #Create AUC data
 svm_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("SVM")
-print(svm_auc_validation)
 
 auc.tmp <- performance(pred_lasso_test,"auc") #Create AUC data
 lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-print("Lasso")
-print(lasso_auc_validation)
+
+AUC_table = matrix(rep(0,7),ncol=1)
+AUC_table[1,1]<- tree_auc_validation
+AUC_table[2,1]<- large_tree_auc_validation
+AUC_table[3,1]<- log_auc_validation
+AUC_table[4,1]<- xgboost_auc_validation
+AUC_table[5,1]<- random_forest_auc_validation
+AUC_table[6,1]<- svm_auc_validation
+AUC_table[7,1]<- lasso_auc_validation
+
+colnames(AUC_table) <- c(paste("AUC"))
+rownames(AUC_table) <- c(paste("Ctree"), paste("Rpart"),paste("Log"),paste("Xgboost"),paste("Random Forest"),paste("SVM"),paste("Lasso"))
+knitr::kable(AUC_table)
 ```
 
 Finally the profit curves for the test data, using the same profit/cost estimates as above:

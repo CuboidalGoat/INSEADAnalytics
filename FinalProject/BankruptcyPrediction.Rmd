@@ -154,10 +154,10 @@ class_1_interpretation = "bankruptcy"
 class_0_interpretation = "no bankruptcy"
 
 # Please ENTER the profit/cost values for correctly classified and misclassified data:
-actual_1_predict_1 = 1
-actual_1_predict_0 = -0.0000
-actual_0_predict_1 = 0.9565
-actual_0_predict_0 = 1.0455
+actual_1_predict_1 = 0
+actual_1_predict_0 = -1
+actual_0_predict_1 = -0.0435
+actual_0_predict_0 = 0.0455
 
 Profit_Matrix = matrix(c(actual_1_predict_1, actual_0_predict_1, actual_1_predict_0, actual_0_predict_0), ncol=2)
 colnames(Profit_Matrix) <- c(paste("Predict 1 (", class_1_interpretation, ")", sep = ""), paste("Predict 0 (", class_0_interpretation, ")", sep = ""))
@@ -542,7 +542,7 @@ test_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.test
 theprofit_lasso_max <- 0
 
 for (i in 1:100) {
-  test_prediction_lasso=1*as.vector(validation_Probability_lasso > i/100)
+  test_prediction_lasso=1*as.vector(test_Probability_lasso > i/100)
   theprofit_lasso <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_lasso==1)+
     Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_lasso==0)+
     Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_lasso==1)+
@@ -554,9 +554,9 @@ for (i in 1:100) {
 }
 
 # Let's get the decision of Lasso Regression for the 3 types of data 
-estimation_prediction_class_lasso=1*as.vector(estimation_Probability_lasso > Probability_Threshold)
-validation_prediction_class_lasso=1*as.vector(validation_Probability_lasso > Probability_Threshold)
-test_prediction_class_lasso=1*as.vector(test_Probability_lasso > Probability_Threshold)
+estimation_prediction_class_lasso=1*as.vector(estimation_Probability_lasso > Probability_Threshold_lasso)
+validation_prediction_class_lasso=1*as.vector(validation_Probability_lasso > Probability_Threshold_lasso)
+test_prediction_class_lasso=1*as.vector(test_Probability_lasso > Probability_Threshold_lasso)
 
 #Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_lasso,validation_Probability_lasso)
 #rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
@@ -671,7 +671,7 @@ The leaves of the tree indicate the number of estimation data observations that 
 ```{r echo=FALSE}
 # Tree parameter
 # Please ENTER the new tree (CART) complexity control cp 
-CART_cp = 0.0088235
+CART_cp = 0.013
 ```
 
 One can estimate larger trees through changing the tree's **complexity control** parameter (in this case the rpart.control argument cp). For example, this is how the tree would look like if we set cp=`r toString(CART_cp)`:
@@ -817,7 +817,7 @@ test_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(test_d
 theprofit_xgboost_max <- 0
 
 for (i in 1:100) {
-  test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > i/100)
+  test_prediction_class_xgboost=1*as.vector(test_Probability_class1_xgboost > i/100)
   theprofit_xgboost <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_xgboost==1)+
     Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_xgboost==0)+
     Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_xgboost==1)+

@@ -432,7 +432,7 @@ pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071")
 # create model matrices for training, validation, and new applicants
 x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
 x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
-x.test_data<-model.matrix(~. , data = test_data)[,-1]
+x.test_data<-model.matrix(Bankrupt.~. , data = test_data)[,-1]
 
 #LASSO (alpha=1)
 lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial")
@@ -531,26 +531,39 @@ In this note we will consider for simplicity only two classification methods: **
 ```{r echo=FALSE}
 
 if(Lasso){
-# predicting the performance on the validation set
-lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
-write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
+# Let's get the probabilities for the 3 types of data from Lasso Regression
+estimation_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.estimation_data, family="binomial",type="response")
+validation_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
+test_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.test_data, family="binomial",type="response")
 
-lasso_classification<-rep("1",1000)
-lasso_classification[lasso_probabilities<Probability_Threshold]="0" 
-lasso_classification<-as.factor(lasso_classification)
+#write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
 
-####ROC Curve
-lasso_ROC_prediction <- prediction(lasso_probabilities, validation_data$Bankrupt.)
-lasso_ROC <- performance(lasso_ROC_prediction,"tpr","fpr") #Create ROC curve data
-plot(lasso_ROC) #Plot ROC curve
+#Optimizing the probability threshold to maximize profit
+theprofit_lasso_max <- 0
 
-####AUC (area under curve)
-auc.tmp <- performance(lasso_ROC_prediction,"auc") #Create AUC data
-lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
-lasso_auc_validation #Display AUC value: 90+% - excellent, 80-90% - very good, 70-80% - good, 60-70% - so so, below 60% - not much value
+for (i in 1:100) {
+  test_prediction_lasso=1*as.vector(validation_Probability_lasso > i/100)
+  theprofit_lasso <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_lasso==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_lasso==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_lasso==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_lasso==0)
+  if (theprofit_lasso > theprofit_lasso_max){
+    theprofit_lasso_max <- theprofit_lasso
+    Probability_Threshold_lasso <- i/100
+  }
+}
+
+# Let's get the decision of Lasso Regression for the 3 types of data 
+estimation_prediction_class_lasso=1*as.vector(estimation_Probability_lasso > Probability_Threshold)
+validation_prediction_class_lasso=1*as.vector(validation_Probability_lasso > Probability_Threshold)
+test_prediction_class_lasso=1*as.vector(test_Probability_lasso > Probability_Threshold)
+
+Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_lasso,validation_Probability_lasso)
+rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
 
 #### Lift chart
-plotLift(lasso_probabilities, validation_data$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
+#plotLift(lasso_probabilities, validation_data$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
 
 ###Confusion matrix  
 #confusionMatrix(lasso_classification,as.factor(validation_data$Bankrupt.),positive = "1")
@@ -612,9 +625,9 @@ validation_prediction_class_log=1*as.vector(validation_Probability_class1_log > 
 test_prediction_class_log=1*as.vector(test_Probability_class1_log > Probability_Threshold_log)
 
 
-Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
-rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+#Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
+#rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+#colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
 
 knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
 ```
@@ -920,13 +933,15 @@ This is the percentage of the observations that have been correctly classified (
 
 ```{r echo=FALSE}
 validation_actual=validation_data[,dependent_variable]
-validation_predictions = rbind(validation_prediction_class_log,
+validation_predictions = rbind(validation_prediction_class_lasso,
+                               validation_prediction_class_log,
                                validation_prediction_class_tree,
                                validation_prediction_class_tree_large,
                                validation_prediction_class_xgboost,
                                validation_prediction_class_random_forest,
                                validation_prediction_class_svm)
 validation_hit_rates = rbind(
+  100*sum(validation_prediction_class_lasso==validation_actual)/length(validation_actual),
   100*sum(validation_prediction_class_log==validation_actual)/length(validation_actual),
   100*sum(validation_prediction_class_tree==validation_actual)/length(validation_actual), 
   100*sum(validation_prediction_class_tree_large==validation_actual)/length(validation_actual),
@@ -935,20 +950,22 @@ validation_hit_rates = rbind(
   100*sum(validation_prediction_class_svm==validation_actual)/length(validation_actual)
   )
 colnames(validation_hit_rates) <- "Hit Ratio"
-rownames(validation_hit_rates) <- c("Logistic Regression", "First CART", "Second CART","XGBoost","Random Forest","SVM")
+rownames(validation_hit_rates) <- c("Lasso Regression","Logistic Regression", "First CART", "Second CART","XGBoost","Random Forest","SVM")
 knitr::kable(validation_hit_rates)
 ```
 
 For the estimation data, the hit rates are:
 ```{r echo=FALSE}
 estimation_actual=estimation_data[,dependent_variable]
-estimation_predictions = rbind(estimation_prediction_class_log,
+estimation_predictions = rbind(estimation_prediction_class_lasso,
+                               estimation_prediction_class_log,
                                estimation_prediction_class_tree,
                                estimation_prediction_class_tree_large,
                                estimation_prediction_class_xgboost,
                                estimation_prediction_class_random_forest,
                                estimation_prediction_class_svm)
 estimation_hit_rates = rbind(
+  100*sum(estimation_prediction_class_lasso==estimation_actual)/length(estimation_actual),
   100*sum(estimation_prediction_class_log==estimation_actual)/length(estimation_actual),
   100*sum(estimation_prediction_class_tree==estimation_actual)/length(estimation_actual), 
   100*sum(estimation_prediction_class_tree_large==estimation_actual)/length(estimation_actual),
@@ -957,7 +974,7 @@ estimation_hit_rates = rbind(
   100*sum(estimation_prediction_class_svm==estimation_actual)/length(estimation_actual)
   )
 colnames(estimation_hit_rates) <- "Hit Ratio"
-rownames(estimation_hit_rates) <- c("Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM")
+rownames(estimation_hit_rates) <- c("Lasso Regression", "Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM")
 knitr::kable(estimation_hit_rates)
 ```
 
@@ -1002,6 +1019,7 @@ The ROC curves for the validation data for the logistic regression as well as bo
 ```{r echo=FALSE}
 validation_actual_class <- as.numeric(validation_data[,dependent_variable])
 
+pred_lasso <- prediction(validation_Probability_lasso, validation_actual_class)
 pred_tree <- prediction(validation_Probability_class1_tree, validation_actual_class)
 pred_tree_large <- prediction(validation_Probability_class1_tree_large, validation_actual_class)
 pred_log <- prediction(validation_Probability_class1_log, validation_actual_class)
@@ -1039,11 +1057,16 @@ df6<- cbind(as.data.frame(test6@x.values),as.data.frame(test6@y.values))
 colnames(df6) <- c("False Positive rate SVM", "True Positive rate SVM")
 plot6 <- ggplot(df6, aes(x=`False Positive rate SVM`, y=`True Positive rate SVM`)) + geom_line()
 
+test7<-performance(pred_lasso, "tpr", "fpr")
+df7<- cbind(as.data.frame(test7@x.values),as.data.frame(test7@y.values))
+colnames(df7) <- c("False Positive rate Lasso", "True Positive rate Lasso")
+plot7 <- ggplot(df7, aes(x=`False Positive rate lasso`, y=`True Positive rate lasso`)) + geom_line()
+
 # We can plot the curves individually 
 # grid.arrange(plot1, plot2, plot3)   # use `fig.height=7.5` for the grid plot
 
 # But we are going to combine them instead
-df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6), function(df) {
+df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7), function(df) {
   df <- melt(df, id=1)
   df$variable <- sub("True Positive rate ", "", df$variable)
   colnames(df)[1] <- "False Positive rate"
@@ -1051,7 +1074,7 @@ df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6), function(df)
 }))
 
 #ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="blue")
-ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
 
 How should a good ROC curve look like? A rule of thumb in assessing ROC curves is that the "higher" the curve (i.e., the closer it gets to the point with coordinates (0,1)), hence the larger the area under the curve, the better. You may also select one point on the ROC curve (the "best one" for our purpose) and use that false positive/false negative performances (and corresponding threshold for P(1)) to assess your model. 

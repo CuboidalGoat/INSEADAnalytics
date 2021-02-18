@@ -987,7 +987,16 @@ A simple benchmark to compare the hit ratio performance of a classification mode
 The confusion matrix shows for each class the number (or percentage) of the  data that are correctly classified for that class. For example, for the method above with the highest hit rate in the validation data (among logistic regression and the 2 CART models), and for probability threshold `r Probability_Threshold*100`%, the confusion matrix for the validation data is:
 
 ```{r echo=FALSE}
-validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
+#validation_predictions = rbind(validation_prediction_class_lasso,
+#                               validation_prediction_class_log,
+#                               validation_prediction_class_tree,
+#                               validation_prediction_class_tree_large,
+#                               validation_prediction_class_xgboost,
+#                               validation_prediction_class_random_forest,
+#                               validation_prediction_class_svm)
+#validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
+
+#validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
 conf_matrix = matrix(rep(0,4),ncol=2)
 conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
 conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
@@ -1275,7 +1284,7 @@ Having iterated steps 2-5 until we are satisfied with the performance of our sel
 Let's see in our case how the **hit ratio, confusion matrix, ROC curve, gains chart, and profit curve** look like for our test data. For the hit ratio and the confusion matrix we use `r Probability_Threshold*100`% as the probability threshold for classification.
 
 ```{r echo=FALSE}
-######for train data#####
+######for test data#####
 test_actual=test_data[,dependent_variable]
 test_predictions = rbind(test_prediction_class_lasso,
                          test_prediction_class_log,

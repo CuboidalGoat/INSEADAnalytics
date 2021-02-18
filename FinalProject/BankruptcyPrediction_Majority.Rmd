@@ -1282,8 +1282,8 @@ sum_test_all_methods = test_prediction_class_lasso+
                          test_prediction_class_random_forest+
                          test_prediction_class_svm
 
-sum_test_all_methods[sum_test_all_methods<=4] <- 0
-sum_test_all_methods[sum_test_all_methods>4] <- 1
+sum_test_all_methods[sum_test_all_methods<=2] <- 0
+sum_test_all_methods[sum_test_all_methods>2] <- 1
   
 test_predictions = rbind(test_prediction_class_lasso,
                          test_prediction_class_log,

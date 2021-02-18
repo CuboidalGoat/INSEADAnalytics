@@ -530,10 +530,10 @@ validation_prediction_class_lasso=1*as.vector(validation_Probability_lasso > Pro
 test_prediction_class_lasso=1*as.vector(test_Probability_lasso > Probability_Threshold_lasso)
 
 Classification_Table_lasso=rbind(validation_data[,dependent_variable],validation_prediction_class_lasso,t(validation_Probability_lasso))
-rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+rownames(Classification_Table_lasso)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_lasso)<- paste("Obs", 1:ncol(Classification_Table_lasso), sep=" ")
 
-knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+knitr::kable(head(t(round(Classification_Table_lasso,2)), max_data_report)) #t(x) returns the transpose of x
 
 
 #### Lift chart
@@ -599,11 +599,11 @@ validation_prediction_class_log=1*as.vector(validation_Probability_class1_log > 
 test_prediction_class_log=1*as.vector(test_Probability_class1_log > Probability_Threshold_log)
 
 
-Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
-rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+Classification_Table_log=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
+rownames(Classification_Table_log)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_log)<- paste("Obs", 1:ncol(Classification_Table_log), sep=" ")
 
-knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+knitr::kable(head(t(round(Classification_Table_log,2)), max_data_report)) #t(x) returns the transpose of x
 ```
 
 
@@ -700,15 +700,15 @@ validation_prediction_class_tree_large=1*as.vector(validation_Probability_class1
 test_prediction_class_tree=1*as.vector(test_Probability_class1_tree > Probability_Threshold_tree)
 test_prediction_class_tree_large=1*as.vector(test_Probability_class1_tree_large > Probability_Threshold_tree_large)
 
-Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_tree,validation_Probability_class1_tree)
-rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+Classification_Table_tree=rbind(validation_data[,dependent_variable],validation_prediction_class_tree,validation_Probability_class1_tree)
+rownames(Classification_Table_tree)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_tree)<- paste("Obs", 1:ncol(Classification_Table_tree), sep=" ")
 
 Classification_Table_large=rbind(validation_data[,dependent_variable],validation_prediction_class_tree_large,validation_Probability_class1_tree_large)
 rownames(Classification_Table_large)<-c("Actual Class","Predicted Class","Probability of Class 1")
 colnames(Classification_Table_large)<- paste("Obs", 1:ncol(Classification_Table_large), sep=" ")
 
-knitr::kable(head(t(round(Classification_Table,2)), max_data_report))
+knitr::kable(head(t(round(Classification_Table_large,2)), max_data_report))
 ```
 
 The table above assumes that the **probability threshold** for considering an observations as "class 1" is `r Probability_Threshold`. In practice we need to select the probability threshold: this is an important choice that we will discuss below.
@@ -789,11 +789,11 @@ estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xg
 validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold_xgboost)
 test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold_xgboost)
 
-Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
-rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+Classification_Table_xgboost=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
+rownames(Classification_Table_xgboost)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_xgboost)<- paste("Obs", 1:ncol(Classification_Table_xgboost), sep=" ")
 
-knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+knitr::kable(head(t(round(Classification_Table_xgboost,2)), max_data_report)) #t(x) returns the transpose of x
 }
 ```
 
@@ -828,11 +828,11 @@ for (i in 1:100) {
  validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold_random_forest)
  test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold_random_forest)
 # 
- Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
- rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
- colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+ Classification_Table_random_forest=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
+ rownames(Classification_Table_random_forest)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table_random_forest)<- paste("Obs", 1:ncol(Classification_Table_random_forest), sep=" ")
 # 
- knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+ knitr::kable(head(t(round(Classification_Table_random_forest,2)), max_data_report)) #t(x) returns the transpose of x
 #potential error here: The response has five or fewer unique values.  Are you sure you want to do regression?
 
 }
@@ -869,11 +869,11 @@ for (i in 1:100) {
  validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold_svm)
  test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold_svm)
 # 
- Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
- rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
- colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+ Classification_Table_svm=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
+ rownames(Classification_Table_svm)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table_svm)<- paste("Obs", 1:ncol(Classification_Table_svm), sep=" ")
 # 
- knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+ knitr::kable(head(t(round(Classification_Table_svm,2)), max_data_report)) #t(x) returns the transpose of x
 }
 ```
 

@@ -942,15 +942,8 @@ A simple benchmark to compare the hit ratio performance of a classification mode
 The confusion matrix shows for each class the number (or percentage) of the  data that are correctly classified for that class. For example, for the method above with the highest hit rate in the validation data (among logistic regression and the 2 CART models), and for probability threshold `r Probability_Threshold*100`%, the confusion matrix for the validation data is:
 
 ```{r echo=FALSE}
-#validation_predictions = rbind(validation_prediction_class_lasso,
-#                               validation_prediction_class_log,
-#                               validation_prediction_class_tree,
-#                               validation_prediction_class_tree_large,
-#                               validation_prediction_class_xgboost,
-#                               validation_prediction_class_random_forest,
-#                               validation_prediction_class_svm)
-#validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
 
+#validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
 validation_prediction_best = validation_predictions[1,]
 conf_matrix = matrix(rep(0,4),ncol=2)
 conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
@@ -1108,13 +1101,13 @@ ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_c
 ### 5. Profit curve
 Finally, we can generate the so called profit curve, which we often use to make our final decisions. The intuition is as follows. Consider a direct marketing campaign, and suppose it costs $1 to send an advertisement, and the expected profit from a person who responds positively is $45. Suppose you have a database of 1 million people to whom you could potentially send the promotion. Typical response rates are 0.05%. What fraction of the 1 million people should you send the promotion to? 
 
-To answer this type of questions, we need to create the **profit curve**. We can measure some measure of profit if we only select the top cases in terms of the probability of response assigned by our classifier. We can plot the profit curve by changing, as we did for the gains chart, the percentage of cases we select, and calculating the corresponding total **estimated profit** (or loss) we would generate. This is simply equal to:
+To answer this type of questions, we need to create the **profit curve**. We can measure some measure of profit if we only select the top cases in terms of the probability of response assigned by our classifier. We can plot the profit curve by changing, the percentage of cases we select, and calculating the corresponding total **estimated profit** (or loss) we would generate. This is simply equal to:
 
 > Total Estimated Profit = (% of 1's correctly predicted)x(value of capturing a 1) + (% of 0's correctly predicted)x(value of capturing a 0) + (% of 1's incorrectly predicted as 0)x(cost of missing a 1) + (% of 0's incorrectly predicted as 1)x(cost of missing a 0)
 > 
 > Calculating the expected profit requires we have an estimate of the four costs/values: the value of capturing a 1 or a 0, and the cost of misclassifying a 1 into a 0 or vice versa. 
 
-Given the values and costs of correct classifications and misclassifications, we can plot the total estimated profit (or loss) as we change the percentage of cases we select, i.e., the probability threshold of the classifier, like we did for the ROC and the gains chart. 
+Given the values and costs of correct classifications and misclassifications, we can plot the total estimated profit (or loss) as we change the percentage of cases we select, i.e., the probability threshold of the classifier, like we did for the ROC. 
 
 In our credit card default case, we consider the following business profit and loss to the credit card issuer for the correctly classified and misclassified customers: 
 
@@ -1270,7 +1263,7 @@ ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable))
 ## Step 6. Test Accuracy
 Having iterated steps 2-5 until we are satisfied with the performance of our selected model on the validation data, in this step the performance analysis outlined in step 5 needs to be done with the test sample. This is the performance that best mimics what one should expect in practice upon deployment of the classification solution, **assuming (as always) that the data used for this performance analysis are representative of the situation in which the solution will be deployed.** 
 
-Let's see in our case how the **hit ratio, confusion matrix, ROC curve, gains chart, and profit curve** look like for our test data. For the hit ratio and the confusion matrix we use `r Probability_Threshold*100`% as the probability threshold for classification.
+Let's see in our case how the **hit ratio, confusion matrix, ROC curve, and profit curve** look like for our test data. For the hit ratio and the confusion matrix we use `r Probability_Threshold*100`% as the probability threshold for classification.
 
 ```{r echo=FALSE}
 ######for test data#####
@@ -1393,16 +1386,7 @@ colnames(conf_matrix) <- c(paste("Rforest Predicted 1 (", class_1_interpretation
 rownames(conf_matrix) <- c(paste("Rforest Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Actual 0 (", class_0_interpretation, ")", sep = ""))
 knitr::kable(conf_matrix)
 
-
 test_prediction_best = test_predictions[7,]
-conf_matrix = matrix(rep(0,4),ncol=2)
-conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
-conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
-conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
-conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
-conf_matrix = round(conf_matrix,2)
-
-test_prediction_best = test_predictions[8,]
 conf_matrix = matrix(rep(0,4),ncol=2)
 conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
 conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
@@ -1412,6 +1396,18 @@ conf_matrix = round(conf_matrix,2)
 
 colnames(conf_matrix) <- c(paste("SVM Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Predicted 0 (", class_0_interpretation, ")", sep = ""))
 rownames(conf_matrix) <- c(paste("SVM Actual 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+test_prediction_best = test_predictions[8,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Majority Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Majority Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Majority Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Majority Actual 0 (", class_0_interpretation, ")", sep = ""))
 knitr::kable(conf_matrix)
 ```
 

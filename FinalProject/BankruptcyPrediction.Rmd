@@ -603,6 +603,9 @@ Classification_Table_log=rbind(validation_data[,dependent_variable],validation_p
 rownames(Classification_Table_log)<-c("Actual Class","Predicted Class","Probability of Class 1")
 colnames(Classification_Table_log)<- paste("Obs", 1:ncol(Classification_Table_log), sep=" ")
 
+write.csv(test_Probability_class1_log, file="test_Probability_class1_log.csv")
+write.csv(test_data[,dependent_variable], file="test_actualdata.csv")
+
 knitr::kable(head(t(round(Classification_Table_log,2)), max_data_report)) #t(x) returns the transpose of x
 ```
 

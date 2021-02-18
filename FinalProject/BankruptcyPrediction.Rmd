@@ -327,30 +327,10 @@ if (length(unique(NEW_ProjectData_withB[,dependent_variable])) !=2){
 
 #TS
 
-# A Process for Classification
-
-> It is important to remember that data analytics projects require a delicate balance between experimentation, intuition, and following a process. The value of following a process is so as to avoid getting fooled by randomness in data and finding "results and patterns" that are mainly driven by our own biases and not by the facts/data themselves.
-
-*There is no single best process* for classification. However, we have to start somewhere, so we will use the following process:
-
-1. Create an estimation sample and two validation samples by splitting the data into three groups. Steps 2-5 below will then be performed only on the estimation and the first validation data. You should only do step 6 once on the second validation data, also called **test data**, and only report/use the performance on that (second validation) data to make final business decisions. 
-2. Set up the dependent variable (as a categorical 0-1 variable; multi-class classification is also feasible, and similar, but we do not explore it in this note). 
-3. Make a preliminary assessment of the relative importance of the explanatory variables using visualization tools and simple descriptive statistics. 
-4. Estimate the classification model using the estimation data, and interpret the results.
-5. Assess the accuracy of classification in the first validation sample, possibly repeating steps 2-5 a few times changing the classifier in different ways to increase performance.
-6. Finally, assess the accuracy of classification in the second validation sample. You should eventually use and report all relevant performance measures and plots on this second validation sample only.
-
-Let's follow these steps.
+# Classification
 
 
 ## Step 1: Split the data 
-It is very important that you (or the data scientists working on the project) finally measure and report the performance of the models on **data that have not been used at all during the analysis, called "out-of-sample" or test data** (steps 2-5 above). The idea is that in practice we want our models to be used for predicting the class of observations/data we have not seen yet (i.e., "the future data"): although the performance of a classification method may be high in the data used to estimate the model parameters, it may be significantly poorer on data not used for parameter estimation, such as the **out-of-sample** (future) data. 
-
-This is why we split the data into an estimation sample and two validation samples  - using some kind of randomized splitting technique. The second validation data mimic out-of-sample data, and the performance on this validation set is a better approximation of the performance one should expect in practice from the selected classification method. The estimation data and the first validation data are used during steps 2-5 (with a few iterations of these steps), while the second validation data is only used once at the very end before making final business decisions based on the analysis. The split can be, for example, 80% estimation, 10% validation, and 10% test data, depending on the number of observations - for example, when there is a lot of data, you may only keep a few hundreds of them for the validation and test sets, and use the rest for estimation. 
-
-While setting up the estimation and validation samples, you should also check that the same proportion of data from each class (i.e., customers who default versus not) are maintained in each sample. That is, you should maintain the same balance of the dependent variable categories as in the overall dataset. 
-
-For simplicity, in this note we will not iterate steps 2-5. In practice, however, we should usually iterate steps 2-5 a number of times using the first validation sample each time, and at the end make our final assessment of the classification model using the test sample only once. 
 
 ```{r echo=FALSE}
 
@@ -382,9 +362,7 @@ We typically refer to the three data samples as **estimation data** (`r estimati
 In our case we use `r nrow(estimation_data)` observations in the estimation data, `r nrow(validation_data)` in the validation data, and `r nrow(test_data)` in the test data. 
 
 ## Step 2: Set up the dependent variable
-First, make sure the dependent variable is set up as a categorical 0-1 variable. In our illustrative example, we use the payment default (or no default) as the dependent variable. 
-
-The data however may not be always readily available with a categorical dependent variable. Suppose a retailer wants to understand what discriminates consumers who are  loyal versus those who are not. If they have data on the amount that customers spend in their store or the frequency of their purchases, they can create a categorical variable ("loyal vs. not loyal") by using a definition such as: "A loyal customer is one who spends more than X amount at the store and makes at least Y purchases a year". They can then code these loyal customers as "1" and the others as "0". They can choose the thresholds X and Y as they wish: a definition/decision that may have a big impact in the overall analysis. This decision can be the most crucial one of the whole data analysis: a wrong choice at this step may lead both to poor performance later as well as to no valuable insights. One should revisit the choice made at this step several times, iterating steps 2-3 and 2-5.
+First, make sure the dependent variable is set up as a categorical 0-1 variable. 
 
 > Carefully deciding what the dependent 0/1 variable is can be the most critical choice of a classification analysis. This decision typically depends on contextual knowledge and needs to be revisited multiple times throughout a data analytics project. 
 
@@ -518,18 +496,11 @@ test_data=Data_Used[test_data_ids,]
 
 
 ## Step 4: Classification and Interpretation
-Once we decide which  dependent and independent variables to use (which can be revisited in later iterations), one can use a number of classification methods to develop a model that discriminates the different classes. 
 
-> Some of the widely used classification methods are:  classification and regression trees (CART), boosted trees, support vector machines, neural networks, nearest neighbors, logistic regression, lasso, random forests, deep learning methods, etc.
-
-In this note we will consider for simplicity only two classification methods: **logistic regression** and **classification and regression trees (CART)**.
-
-<<<<<<< HEAD
 =======
 
 
 ```{r echo=FALSE}
-
 if(Lasso){
 # Let's get the probabilities for the 3 types of data from Lasso Regression
 estimation_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.estimation_data, family="binomial",type="response")
@@ -579,9 +550,7 @@ knitr::kable(head(t(round(Classification_Table_lasso,2)), max_data_report)) #t(x
 }
 ```
 
->>>>>>> 81c377952c09d4865a57ffc40526ee8ff8e669dd
-**Logistic Regression**: Logistic Regression is a method similar to linear regression except that the dependent variable is discrete (e.g., 0 or 1). **Linear** logistic regression estimates the coefficients of a linear model using the selected independent variables while optimizing a classification criterion. For example, this is the logistic regression parameters for our data:
-
+**Logistic Regression**: 
 
 ```{r echo=FALSE}
 # We first turn the data into data.frame's
@@ -635,16 +604,9 @@ colnames(Classification_Table_log)<- paste("Obs", 1:ncol(Classification_Table_lo
 knitr::kable(head(t(round(Classification_Table_log,2)), max_data_report)) #t(x) returns the transpose of x
 ```
 
-The default decision is to classify each observation in the group with the highest probability - but one can change this choice, as we discuss below.
-
-Selecting the best subset of independent variables for logistic regression, a special case of the general problem of **feature selection**, is an iterative process where both the significance of the regression coefficients as well as the performance of the estimated logistic regression model on the first validation data are used as guidance. A number of variations are tested in practice, each leading to different performance. 
-
 
 **CART**: CART is a widely used classification method largely because the estimated classification models are easy to interpret. This classification tool iteratively "splits" the data using the most discriminatory independent variable at each step, building a "tree" - as shown below - on the way. The CART methods **limit the size of the tree** using various statistical techniques in order to avoid **overfitting the data**. For example, using the rpart and rpart.control functions in R, we can limit the size of the tree by selecting the functions' **complexity control** parameter **cp**. (What this parameter does exactly is beyond the scope of this note. For the rpart and rpart.control functions in R, smaller values, e.g. cp=0.0001, lead to larger trees, as we will see next.)
 
-> One of the biggest risks when developing classification models is overfitting: while it is always trivial to develop a model (e.g., a tree) that classifies any (estimation) dataset with no misclassification error at all, there is no guarantee that the quality of a classifier in out-of-sample data (e.g., in the validation data) will be close to that in the estimation data. Striking the right balance between "overfitting" and "underfitting" is one of the most important aspects in data analytics. While there are a number of statistical techniques to help us strike this balance - including the use of validation data - it is largely a combination of good statistical analysis and qualitative criteria (such as the interpretability and simplicity of the estimated models) that leads to classification models that work well in practice. 
-
-Running a basic CART model with complexity control cp=`r CART_cp`,  leads to the following tree (**NOTE**: for better readability of the tree figures below,  we will rename the independent variables as IV1 to `r paste("IV", length(independent_variables), sep="")` when using CART):
 
 ```{r echo=FALSE}
 # Name the variables numerically so that they look ok on the tree plots
@@ -749,16 +711,6 @@ knitr::kable(head(t(round(Classification_Table_large,2)), max_data_report))
 
 The table above assumes that the **probability threshold** for considering an observations as "class 1" is `r Probability_Threshold`. In practice we need to select the probability threshold: this is an important choice that we will discuss below.
 
-**Question:**
-
-Run CART for complexity parameter cp=0.0001 or smaller. Is it practical to run? Is it practical to interpret? Do you trust the classifier?
-
-**Answer:**
-
-*
-
-
-We have already discussed feature selection and complexity control for classification methods. In our case, we can see the relative importance of the independent variables using the `variable.importance` of the CART trees (see `help(rpart.object)` in R) or the z-scores from the output of logistic regression. For easier visualization, we scale all values between -1 and 1 (the scaling is done for each method separately - note that CART does not provide the sign of the "coefficients"). From this table we can see the **key drivers** of the classification according to each of the methods we used here. 
 
 ```{r echo=FALSE, comment=NA, warning=FALSE, message=FALSE, results='asis'}
 log_importance = tail(log_coefficients[,"z value", drop=F],-1) # remove the intercept
@@ -785,8 +737,7 @@ rownames(Importance_table) <- rownames(log_importance)
 knitr::kable(round(Importance_table,2))
 ```
 
-In general it is not necessary for all methods to agree on the most important drivers: when there is "major" disagreement, particularly among models that have satisfactory performance as discussed next, we may need to reconsider the overall analysis, including the objective of the analysis as well as the data used, as the results may not be robust. **As always, interpreting and using the results of data analytics requires a balance between quantitative and qualitative analysis.** 
-
+<!-- **XGBoost:** -->
 
 ```{r echo=FALSE}
 if (XGBoost){
@@ -1009,18 +960,6 @@ rownames(conf_matrix) <- c(paste("Actual 1 (", class_1_interpretation, ")", sep 
 knitr::kable(conf_matrix)
 ```
 
-**Questions:**
-
-1. Note that the percentages add up to 100% for each row. Why?
-2. Moreover, a "good" confusion matrix should have large diagonal values and small off-diagonal ones. Why?
-
-**Answers:**
-
-*
-*
-
-
-
 ### 3. ROC curve
 Remember that each observation is classified by our model according to the probabilities Pr(0) and Pr(1) and a chosen probability threshold. Typically we set the probability threshold to 0.5 - so that observations for which Pr(1) > 0.5 are classified as 1's. However, we can vary this threshold, for example if we are interested in correctly predicting all 1's but do not mind missing some 0's (and vice-versa).
 
@@ -1088,19 +1027,6 @@ df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7), functio
 #ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="blue")
 ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
-
-How should a good ROC curve look like? A rule of thumb in assessing ROC curves is that the "higher" the curve (i.e., the closer it gets to the point with coordinates (0,1)), hence the larger the area under the curve, the better. You may also select one point on the ROC curve (the "best one" for our purpose) and use that false positive/false negative performances (and corresponding threshold for P(1)) to assess your model. 
-
-**Questions:**
-
-1. Which point on the ROC would you select?
-2. What classifier does the dotted 45-degree line correspond to? How does the ROC plot above showcase that the logistic regression and CART classifiers are superior to such classifier?
-
-**Answers:**
-
-*
-*
-
 
 ### 5. Profit curve
 Finally, we can generate the so called profit curve, which we often use to make our final decisions. The intuition is as follows. Consider a direct marketing campaign, and suppose it costs $1 to send an advertisement, and the expected profit from a person who responds positively is $45. Suppose you have a database of 1 million people to whom you could potentially send the promotion. Typical response rates are 0.05%. What fraction of the 1 million people should you send the promotion to? 
@@ -1263,20 +1189,6 @@ df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, fra
 #ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + geom_line() + ylab("Estimated profit")
 ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
-
-We can then select the percentage of selected cases that corresponds to the maximum estimated profit (or minimum loss, if necessary). 
-
-**Question:**
-
-Which point on the profit curve would you select in practice?
-
-**Answer:**
-
-*
-
-Notice that to maximize estimated profit, we need to have the cost/profit for each of the four cases! This can be difficult to assess, hence typically we want to do a sensitivity analysis to our assumptions about the cost/profit. For example, we can generate different profit curves (i.e., worst case, best case, average case scenarios) and see how much the best profit we get varies, and most importantly **how our selection of the classification model and of the probability threshold corresponding to the best profit vary**, as the classifier and the percentage of cases are what we need to decide on eventually. 
-
-
 
 ## Step 6. Test Accuracy
 Having iterated steps 2-5 until we are satisfied with the performance of our selected model on the validation data, in this step the performance analysis outlined in step 5 needs to be done with the test sample. This is the performance that best mimics what one should expect in practice upon deployment of the classification solution, **assuming (as always) that the data used for this performance analysis are representative of the situation in which the solution will be deployed.** 

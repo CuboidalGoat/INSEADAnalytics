@@ -1399,10 +1399,10 @@ test_actual_class <- as.numeric(test_data[,dependent_variable])
 pred_tree_test <- prediction(test_Probability_class1_tree, test_actual_class)
 pred_tree_large_test <- prediction(test_Probability_class1_tree_large, test_actual_class)
 pred_log_test <- prediction(test_Probability_class1_log, test_actual_class)
-pred_xgboost <- prediction(test_Probability_class1_xgboost, test_actual_class)
-pred_random_forest <- prediction(test_Probability_class1_random_forest, test_actual_class)
-pred_svm <- prediction(test_Probability_class1_svm, test_actual_class)
-pred_lasso <- prediction(test_Probability_lasso, test_actual_class)
+pred_xgboost_test <- prediction(test_Probability_class1_xgboost, test_actual_class)
+pred_random_forest_test <- prediction(test_Probability_class1_random_forest, test_actual_class)
+pred_svm_test <- prediction(test_Probability_class1_svm, test_actual_class)
+pred_lasso_test <- prediction(test_Probability_lasso, test_actual_class)
 
 test<-performance(pred_tree_test, "tpr", "fpr")
 df1<- cbind(as.data.frame(test@x.values),as.data.frame(test@y.values))
@@ -1416,22 +1416,22 @@ test3<-performance(pred_log_test, "tpr", "fpr")
 df3<- cbind(as.data.frame(test3@x.values),as.data.frame(test3@y.values))
 colnames(df3) <- c("False Positive rate log reg", "True Positive log reg")
 
-test4<-performance(pred_xgboost, "tpr", "fpr")
+test4<-performance(pred_xgboost_test, "tpr", "fpr")
 df4<- cbind(as.data.frame(test4@x.values),as.data.frame(test4@y.values))
 colnames(df4) <- c("False Positive rate XGBoost", "True Positive rate XGBoost")
 plot4 <- ggplot(df4, aes(x=`False Positive rate XGBoost`, y=`True Positive rate XGBoost`)) + geom_line()
 
-test5<-performance(pred_random_forest, "tpr", "fpr")
+test5<-performance(pred_random_forest_test, "tpr", "fpr")
 df5<- cbind(as.data.frame(test5@x.values),as.data.frame(test5@y.values))
 colnames(df5) <- c("False Positive rate Random Forest", "True Positive rate Random Forest")
 plot5 <- ggplot(df5, aes(x=`False Positive rate Random Forest`, y=`True Positive rate Random Forest`)) + geom_line()
 
-test6<-performance(pred_svm, "tpr", "fpr")
+test6<-performance(pred_svm_test, "tpr", "fpr")
 df6<- cbind(as.data.frame(test6@x.values),as.data.frame(test6@y.values))
 colnames(df6) <- c("False Positive rate SVM", "True Positive rate SVM")
 plot6 <- ggplot(df6, aes(x=`False Positive rate SVM`, y=`True Positive rate SVM`)) + geom_line()
 
-test7<-performance(pred_lasso, "tpr", "fpr")
+test7<-performance(pred_lasso_test, "tpr", "fpr")
 df7<- cbind(as.data.frame(test7@x.values),as.data.frame(test7@y.values))
 colnames(df7) <- c("False Positive rate Lasso", "True Positive rate Lasso")
 plot7 <- ggplot(df7, aes(x=`False Positive rate lasso`, y=`True Positive rate lasso`)) + geom_line()
@@ -1445,7 +1445,43 @@ df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7), functio
 #ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
+```{r echo=FALSE}
 
+auc.tmp <- performance(pred_tree_test,"auc") #Create AUC data
+tree_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Ctree")
+print(tree_auc_validation)
+
+auc.tmp <- performance(pred_tree_large_test,"auc") #Create AUC data
+large_tree_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Rpart")
+print(large_tree_auc_validation)
+
+auc.tmp <- performance(pred_log_test,"auc") #Create AUC data
+log_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Log")
+print(log_auc_validation)
+
+auc.tmp <- performance(pred_xgboost_test,"auc") #Create AUC data
+xgboost_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Xgboost")
+print(xgboost_auc_validation)
+
+auc.tmp <- performance(pred_random_forest_test,"auc") #Create AUC data
+random_forest_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Random Forest")
+print(random_forest_auc_validation)
+
+auc.tmp <- performance(pred_svm_test,"auc") #Create AUC data
+svm_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("SVM")
+print(svm_auc_validation)
+
+auc.tmp <- performance(pred_lasso_test,"auc") #Create AUC data
+lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Lasso")
+print(lasso_auc_validation)
+```
 
 Finally the profit curves for the test data, using the same profit/cost estimates as above:
 

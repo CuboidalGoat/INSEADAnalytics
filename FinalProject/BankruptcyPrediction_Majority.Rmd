@@ -169,7 +169,6 @@ max_data_report = 10
 ```
 
 ```{r echo=FALSE}
-#can this be removed? There is another correlation table above
 thecor = round(cor(ProjectData),2)
 
 write.csv(round(thecor,2), file = "thecor.csv")
@@ -327,7 +326,6 @@ if (length(unique(NEW_ProjectData_withB[,dependent_variable])) !=2){
 
 <hr>\clearpage
 
-#TS
 
 # Classification
 

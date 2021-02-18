@@ -327,8 +327,6 @@ if (length(unique(NEW_ProjectData_withB[,dependent_variable])) !=2){
 
 <hr>\clearpage
 
-#TS
-
 # Classification
 
 

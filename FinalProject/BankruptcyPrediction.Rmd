@@ -947,7 +947,7 @@ The confusion matrix shows for each class the number (or percentage) of the  dat
 #                               validation_prediction_class_svm)
 #validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
 
-#validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
+validation_prediction_best = validation_predictions[1,]
 conf_matrix = matrix(rep(0,4),ncol=2)
 conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
 conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
@@ -955,9 +955,82 @@ conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,depen
 conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
 conf_matrix = round(conf_matrix,2)
 
-colnames(conf_matrix) <- c(paste("Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Predicted 0 (", class_0_interpretation, ")", sep = ""))
-rownames(conf_matrix) <- c(paste("Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Actual 0 (", class_0_interpretation, ")", sep = ""))
+colnames(conf_matrix) <- c(paste("Lasso Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Lasso Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Actual 0 (", class_0_interpretation, ")", sep = ""))
 knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[2,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Log Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Log Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Log Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Log Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[3,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Ctree Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Ctree Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[4,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rpart Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rpart Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[5,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Xgboost Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Xgboost Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[6,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rforest Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rforest Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[6,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("SVM Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("SVM Actual 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
 ```
 
 ### 3. ROC curve
@@ -1223,7 +1296,9 @@ knitr::kable(test_hit_rates)
 The confusion matrix for the model with the best test data hit ratio above:
 
 ```{r echo=FALSE, message=FALSE, prompt=FALSE, results='asis'}
-test_prediction_best = test_predictions[which.max(test_hit_rates),]
+#test_prediction_best = test_predictions[which.max(test_hit_rates),]
+
+test_prediction_best = test_predictions[1,]
 conf_matrix = matrix(rep(0,4),ncol=2)
 conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
 conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
@@ -1231,8 +1306,86 @@ conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variabl
 conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
 conf_matrix = round(conf_matrix,2)
 
-colnames(conf_matrix) <- c(paste("Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Predicted 0 (", class_0_interpretation, ")", sep = ""))
-rownames(conf_matrix) <- c(paste("Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Actual 0 (", class_0_interpretation, ")", sep = ""))
+colnames(conf_matrix) <- c(paste("Lasso Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Lasso Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[2,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Log Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Log Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Log Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Log Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[3,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Ctree Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Ctree Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[4,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rpart Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rpart Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[5,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Xgboost Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Xgboost Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[6,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rforest Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rforest Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[7,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("SVM Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("SVM Actual 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Actual 0 (", class_0_interpretation, ")", sep = ""))
 knitr::kable(conf_matrix)
 ```
 
@@ -1247,6 +1400,7 @@ pred_log_test <- prediction(test_Probability_class1_log, test_actual_class)
 pred_xgboost <- prediction(test_Probability_class1_xgboost, test_actual_class)
 pred_random_forest <- prediction(test_Probability_class1_random_forest, test_actual_class)
 pred_svm <- prediction(test_Probability_class1_svm, test_actual_class)
+pred_lasso <- prediction(test_Probability_lasso, test_actual_class)
 
 test<-performance(pred_tree_test, "tpr", "fpr")
 df1<- cbind(as.data.frame(test@x.values),as.data.frame(test@y.values))

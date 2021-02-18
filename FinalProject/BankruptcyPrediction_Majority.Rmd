@@ -1,0 +1,1673 @@
+---
+title: "Predict Bankruptcy Of Companies"
+author: "Data Scientologists"
+output:
+  html_document:
+    css: ../AnalyticsStyles/default.css
+    theme: paper
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+  pdf_document:
+    includes:
+      in_header: ../AnalyticsStyles/default.sty
+always_allow_html: yes
+---
+
+<!-- For compiling PDF File -->
+
+```{r echo=FALSE, message=FALSE}
+make_pdf_file = 0 # SET THIS TO 1 IF WE COMPILE PDF FILE, 0 OTHERWISE (FOR HTML)
+
+source("../AnalyticsLibraries/library.R")
+source("../AnalyticsLibraries/heatmapOutput.R")
+
+# Package options
+ggthemr('fresh')  # ggplot theme
+opts_knit$set(progress=FALSE, verbose=FALSE)
+opts_chunk$set(echo=FALSE, fig.align="center", fig.width=10, fig.height=6.2)
+options(knitr.kable.NA = '')
+```
+
+> Methods we are undertaking
+
+```{r}
+#1 means we are using this method, 0 means we are not using it
+XGBoost = 1
+Random_Forest = 1
+SVM = 1
+PCA = 1
+Lasso = 1
+Plot_Eigenvalue_Curve = 1
+```
+
+>Scrubbing the Data Clean
+
+```{r echo=FALSE, message=FALSE}
+# Please ENTER the filename
+datafile_name = "./Data/data.csv"
+ProjectData <- read.csv(datafile_name)
+
+# Fixing incorrectly classified data types in training data:
+#ProjectData$ Net.Income.Flag <- as.factor(ProjectData$ Net.Income.Flag)
+#ProjectData$ Liability.Assets.Flag <- as.factor(ProjectData$ Liability.Assets.Flag)
+#ProjectData$ Bankrupt. <- factor(ProjectData$ Bankrupt.,levels = c(0,1))
+
+# Create a custom function to fix missing values ("NAs") and preserve the NA info as surrogate variables
+
+fixNAs<-function(data_frame){
+  # Define reactions to NAs
+  integer_reac<-0
+  factor_reac<-"FIXED_NA"
+  character_reac<-"FIXED_NA"
+  date_reac<-as.Date("1900-01-01")
+  # Loop through columns in the data frame and depending on which class the variable is, apply the defined reaction and create a surrogate
+  
+  for (i in 1 : ncol(data_frame)){
+    if (class(data_frame[,i]) %in% c("numeric","integer")) {
+      if (any(is.na(data_frame[,i]))){
+        data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+          as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+        data_frame[is.na(data_frame[,i]),i]<-integer_reac
+      }
+    } else
+      if (class(data_frame[,i]) %in% c("factor")) {
+        if (any(is.na(data_frame[,i]))){
+          data_frame[,i]<-as.character(data_frame[,i])
+          data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+            as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+          data_frame[is.na(data_frame[,i]),i]<-factor_reac
+          data_frame[,i]<-as.factor(data_frame[,i])
+          
+        } 
+      } else {
+        if (class(data_frame[,i]) %in% c("character")) {
+          if (any(is.na(data_frame[,i]))){
+            data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+              as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+            data_frame[is.na(data_frame[,i]),i]<-character_reac
+          }  
+        } else {
+          if (class(data_frame[,i]) %in% c("Date")) {
+            if (any(is.na(data_frame[,i]))){
+              data_frame[,paste0(colnames(data_frame)[i],"_surrogate")]<-
+                as.factor(ifelse(is.na(data_frame[,i]),"1","0"))
+              data_frame[is.na(data_frame[,i]),i]<-date_reac
+            }
+          }  
+        }       
+      }
+  } 
+  return(data_frame) 
+}
+
+ProjectData<-fixNAs(ProjectData)
+```
+
+
+
+```{r echo=FALSE, message=FALSE}
+# We turn the data into data.matrix class so that we can easier manipulate it
+#ProjectData <- data.matrix(ProjectData)
+
+# Please ENTER the dependent variable (class).
+# Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
+# You need to make sure that dependent variable takes only two values: 0 and 1.
+dependent_variable = 1
+
+# Please ENTER the attributes to use as independent variables. 
+# Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
+independent_variables = c(2:94,96) # use all the available attributes
+
+ProjectDataFactor <- ProjectData[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
+
+dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(ProjectData), max(i,1))))
+independent_variables = unique(sapply(independent_variables,function(i) min(ncol(ProjectData), max(i,1))))
+
+if (length(unique(ProjectData[,dependent_variable])) !=2){
+  cat("\n*****\n BE CAREFUL, THE DEPENDENT VARIABLE TAKES MORE THAN 2 VALUES")
+  cat("\nSplitting it around its median...\n*****\n ")
+  new_dependent = ProjectData[,dependent_variable] >= median(ProjectData[,dependent_variable])
+  ProjectData[,dependent_variable] <- 1*new_dependent
+}
+
+# Please ENTER the probability threshold above which an observation is predicted as class 1:
+Probability_Threshold = 0.5 # between 0 and 1
+
+# Please ENTER the percentage of data used for estimation
+estimation_data_percent = 80
+validation_data_percent = 10
+test_data_percent = 100-estimation_data_percent-validation_data_percent
+
+# Please ENTER 1 if you want to randomly split the data in estimation and validation/test
+random_sampling = 0
+
+# Tree parameter
+# Please ENTER the tree (CART) complexity control cp (e.g. 0.0001 to 0.02, depending on the data)
+CART_cp = 0.0025
+CART_control = rpart.control(cp = CART_cp)
+
+# Please ENTER the words for the business interpretation of class 1 and class 0:
+class_1_interpretation = "bankruptcy"
+class_0_interpretation = "no bankruptcy"
+
+# Please ENTER the profit/cost values for correctly classified and misclassified data:
+actual_1_predict_1 = 0
+actual_1_predict_0 = -1
+actual_0_predict_1 = -0.0435
+actual_0_predict_0 = 0.0455
+
+Profit_Matrix = matrix(c(actual_1_predict_1, actual_0_predict_1, actual_1_predict_0, actual_0_predict_0), ncol=2)
+colnames(Profit_Matrix) <- c(paste("Predict 1 (", class_1_interpretation, ")", sep = ""), paste("Predict 0 (", class_0_interpretation, ")", sep = ""))
+rownames(Profit_Matrix) <- c(paste("Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Actual 0 (", class_0_interpretation, ")", sep = ""))
+
+# Please ENTER the maximum number of observations to show in the report and slides 
+# (DEFAULT is 50. If the number is large the report and slides may not be generated - very slow or will crash!!)
+max_data_report = 10 
+```
+
+```{r echo=FALSE}
+#can this be removed? There is another correlation table above
+thecor = round(cor(ProjectData),2)
+
+write.csv(round(thecor,2), file = "thecor.csv")
+
+colnames(thecor)<-colnames(ProjectData)
+rownames(thecor)<-colnames(ProjectData)
+
+knitr::kable(round(thecor,2))
+
+```
+
+##Dimesionaliity Reduction
+
+```{r}
+# Please ENTER the original raw attributes to use. 
+# Please use numbers, not column names, e.g. c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8
+#factor_attributes_used = c(2:30)
+
+# Please ENTER the selection criteria for the factors to use. 
+# Choices: "eigenvalue", "variance", "manual"
+factor_selectionciterion = "eigenvalue"
+
+# Please ENTER the desired minimum variance explained 
+# (Only used in case "variance" is the factor selection criterion used). 
+minimum_variance_explained = 65  # between 1 and 100
+
+# Please ENTER the number of factors to use 
+# (Only used in case "manual" is the factor selection criterion used).
+manual_numb_factors_used = 6
+
+# Please ENTER the rotation eventually used (e.g. "none", "varimax", "quatimax", "promax", "oblimin", "simplimax", and "cluster" - see help(principal)). Default is "varimax"
+rotation_used = "varimax"
+
+MIN_VALUE = 0.5
+
+```
+
+
+```{r}
+# Here is how the `principal` function is used 
+if(Plot_Eigenvalue_Curve){
+UnRotated_Results<-principal(ProjectDataFactor,nfactors=ncol(ProjectDataFactor), rotate="none",score=TRUE)
+UnRotated_Factors<-round(UnRotated_Results$loadings,2)
+UnRotated_Factors<-as.data.frame(unclass(UnRotated_Factors))
+colnames(UnRotated_Factors)<-paste("Comp",1:ncol(UnRotated_Factors),sep="")
+}
+```
+
+```{r}
+# Here is how we use the `PCA` function 
+if(Plot_Eigenvalue_Curve){
+Variance_Explained_Table_results<-PCA(ProjectDataFactor, graph=FALSE)
+Variance_Explained_Table<-Variance_Explained_Table_results$eig
+Variance_Explained_Table_copy<-Variance_Explained_Table
+
+rownames(Variance_Explained_Table) <- paste("Component", 1:nrow(Variance_Explained_Table), sep=" ")
+colnames(Variance_Explained_Table) <- c("Eigenvalue", "Pct of explained variance", "Cumulative pct of explained variance")
+
+iprint.df(round(Variance_Explained_Table, 2))
+write.csv(round(Variance_Explained_Table,2), file = "Variance_Explained_Table.csv")
+}
+```
+
+
+```{r}
+if(Plot_Eigenvalue_Curve){
+eigenvalues  <- Variance_Explained_Table[, "Eigenvalue"]
+df           <- cbind(as.data.frame(eigenvalues), c(1:length(eigenvalues)), rep(1, length(eigenvalues)))
+colnames(df) <- c("eigenvalues", "components", "abline")
+iplot.df(melt(df, id="components"))
+}
+```
+
+```{r}
+if(PCA){
+if (factor_selectionciterion == "eigenvalue")
+  factors_selected = sum(Variance_Explained_Table_copy[,1] >= 1)
+if (factor_selectionciterion == "variance")
+  factors_selected = 1:head(which(Variance_Explained_Table_copy[,"cumulative percentage of variance"]>= minimum_variance_explained),1)
+if (factor_selectionciterion == "manual")
+  factors_selected = manual_numb_factors_used
+}
+```
+
+```{r}
+if(PCA){
+Rotated_Results<-principal(ProjectDataFactor, nfactors=max(factors_selected), rotate=rotation_used,score=TRUE)
+Rotated_Factors<-round(Rotated_Results$loadings,2)
+Rotated_Factors<-as.data.frame(unclass(Rotated_Factors))
+colnames(Rotated_Factors)<-paste("Comp.",1:ncol(Rotated_Factors),sep="")
+
+sorted_rows <- sort(Rotated_Factors[,1], decreasing = TRUE, index.return = TRUE)$ix
+Rotated_Factors <- Rotated_Factors[sorted_rows,]
+
+iprint.df(Rotated_Factors, scale=TRUE)
+write.csv(Rotated_Factors, file = "Rotated_Factors.csv")
+}
+
+```
+
+
+```{r}
+if(PCA){
+Rotated_Factors_thres <- Rotated_Factors
+Rotated_Factors_thres[abs(Rotated_Factors_thres) < MIN_VALUE]<-NA
+colnames(Rotated_Factors_thres)<- colnames(Rotated_Factors)
+rownames(Rotated_Factors_thres)<- rownames(Rotated_Factors)
+
+iprint.df(Rotated_Factors_thres, scale=TRUE)
+write.csv(Rotated_Factors_thres, file = "Rotated_Factors_thres.csv")
+}
+```
+
+```{r}
+if(PCA){
+NEW_ProjectData <- round(Rotated_Results$scores[,1:factors_selected,drop=F],2)
+colnames(NEW_ProjectData)<-paste("DV (Factor)",1:ncol(NEW_ProjectData),sep=" ")
+
+iprint.df(t(head(NEW_ProjectData, 10)), scale=TRUE)
+write.csv(NEW_ProjectData, file = "FactorScores.csv")
+}
+```
+
+```{r echo=FALSE, message=FALSE}
+# We turn the data into data.matrix class so that we can easier manipulate it
+if(PCA){
+NEW_ProjectData_withB <- cbind(Bankrupt.=ProjectData[,c(1)],NEW_ProjectData)
+#NEW_ProjectData_withB <- data.matrix(NEW_ProjectData_withB)
+NEW_ProjectData_withB <- as.data.frame(NEW_ProjectData_withB)
+
+# Please ENTER the dependent variable (class).
+# Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
+# You need to make sure that dependent variable takes only two values: 0 and 1.
+dependent_variable = 1
+
+# Please ENTER the attributes to use as independent variables. 
+# Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
+independent_variables = c(2:30) # use all the available attributes
+
+ProjectDataFactor <- NEW_ProjectData_withB[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
+
+dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(NEW_ProjectData_withB), max(i,1))))
+independent_variables = unique(sapply(independent_variables,function(i) min(ncol(NEW_ProjectData_withB), max(i,1))))
+
+if (length(unique(NEW_ProjectData_withB[,dependent_variable])) !=2){
+  cat("\n*****\n BE CAREFUL, THE DEPENDENT VARIABLE TAKES MORE THAN 2 VALUES")
+  cat("\nSplitting it around its median...\n*****\n ")
+  new_dependent = NEW_ProjectData_withB[,dependent_variable] >= median(NEW_ProjectData_withB[,dependent_variable])
+  NEW_ProjectData_withB[,dependent_variable] <- 1*new_dependent
+}
+}
+```
+
+
+<hr>\clearpage
+
+#TS
+
+# Classification
+
+
+## Step 1: Split the data 
+
+```{r echo=FALSE}
+
+if(PCA){
+  Data_Used = NEW_ProjectData_withB
+}  else {
+  Data_Used = ProjectData
+}
+
+if (random_sampling){
+  estimation_data_ids=sample.int(nrow(Data_Used),floor(estimation_data_percent*nrow(Data_Used)/100))
+  non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids) #setdiff(x,y) returns the elements of x that are not in y
+  validation_data_ids=non_estimation_data[sample.int(length(non_estimation_data), floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))]
+  } else {
+    estimation_data_ids=1:floor(estimation_data_percent*nrow(Data_Used)/100)
+    non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids)
+    validation_data_ids = (tail(estimation_data_ids,1)+1):(tail(estimation_data_ids,1) + floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))
+    }
+
+test_data_ids = setdiff(1:nrow(Data_Used), union(estimation_data_ids,validation_data_ids))
+
+estimation_data=Data_Used[estimation_data_ids,]
+validation_data=Data_Used[validation_data_ids,]
+test_data=Data_Used[test_data_ids,]
+```
+
+We typically refer to the three data samples as **estimation data** (`r estimation_data_percent`% of the data in our case), **validation data**  (`r validation_data_percent`% of the data) and **test data** (the remaining `r 100 - estimation_data_percent  -  validation_data_percent`% of the data).
+
+In our case we use `r nrow(estimation_data)` observations in the estimation data, `r nrow(validation_data)` in the validation data, and `r nrow(test_data)` in the test data. 
+
+## Step 2: Set up the dependent variable
+First, make sure the dependent variable is set up as a categorical 0-1 variable. 
+
+> Carefully deciding what the dependent 0/1 variable is can be the most critical choice of a classification analysis. This decision typically depends on contextual knowledge and needs to be revisited multiple times throughout a data analytics project. 
+
+In our data the number of 0/1's in our estimation sample is as follows:
+
+```{r echo=FALSE}
+class_percentages=matrix(c(sum(estimation_data[,dependent_variable]==1),sum(estimation_data[,dependent_variable]==0)), nrow=1); colnames(class_percentages)<-c("Class 1", "Class 0")
+rownames(class_percentages)<-"# of Observations"
+knitr::kable(class_percentages)
+```
+
+while in the validation sample they are:
+
+```{r echo=FALSE}
+class_percentages=matrix(c(sum(validation_data[,dependent_variable]==1),sum(validation_data[,dependent_variable]==0)), nrow=1); colnames(class_percentages)<-c("Class 1", "Class 0")
+rownames(class_percentages)<-"# of Observations"
+knitr::kable(class_percentages)
+```
+
+
+## Step 3: Simple Analysis
+Good data analytics start with good contextual knowledge as well as a simple statistical and visual exploration of the data. In the case of classification, one can explore "simple classifications" by assessing how the classes differ along any of the independent variables. For example, these are the statistics of our independent variables across the two classes in the estimation data, class 1 ("default"):
+
+```{r echo=FALSE}
+knitr::kable(round(my_summary(estimation_data[estimation_data[,dependent_variable]==1,independent_variables]),2))
+```
+
+and class 0 ("no default"):
+
+```{r echo=FALSE}
+knitr::kable(round(my_summary(estimation_data[estimation_data[,dependent_variable]==0,independent_variables]),2))
+```
+
+The purpose of such an analysis by class is to get an initial idea about whether the classes are indeed separable as well as to understand which of the independent variables have most discriminatory power. 
+
+
+
+```{r echo=FALSE}
+###
+### With LASSO / Ridge
+###
+if(Lasso){
+pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+
+# create model matrices for training, validation, and new applicants
+x.estimation_data <-model.matrix(Bankrupt.~. , data = estimation_data)[,-1]# Variables in left-hand side are not included. -1 to remove the Intercept column from the design matrix
+x.validation_data <-model.matrix(Bankrupt.~ ., data = validation_data)[,-1] # -1 to remove the Intercept column from the design matrix
+x.test_data<-model.matrix(Bankrupt.~. , data = test_data)[,-1]
+
+#LASSO (alpha=1)
+lasso.fit<-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial")
+plot(lasso.fit, xvar = "lambda")
+
+#selecting the best penalty lambda
+crossval <-  cv.glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, family="binomial") #create cross-validation data
+plot(crossval)
+penalty.lasso.min <- crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso.min) #see where it was on the graph
+penalty.lasso.1se <- crossval$lambda.1se #a different way to determine optimal penalty parameter, lambda: largest lambda such that error is within 1 standard error of the minimum
+log(penalty.lasso.1se) #see where it was on the graph
+penalty.lasso <- penalty.lasso.1se
+#penalty.lasso <- penalty.lasso.min #comment in or out this line, depending on what criterion you want for the choice of lambda
+plot(crossval,xlim=c(-8,-4),ylim=c(0.22,0.26)) # lets zoom-in
+
+#estimate the model with the optimal penalty
+lasso.opt.fit <-glmnet(x = x.estimation_data, y = estimation_data$Bankrupt., alpha = 1, lambda = penalty.lasso, family="binomial") 
+coef(lasso.opt.fit) #resulting model coefficients
+
+columns_to_include = c(2,4,6,21,23)
+
+}
+```
+
+```{r echo=FALSE, message=FALSE}
+# We turn the data into data.matrix class so that we can easier manipulate it
+if(Lasso*PCA){
+NEW_ProjectData_withB_Lasso <- cbind(Bankrupt.=ProjectData[,c(1)],NEW_ProjectData_withB[,columns_to_include])
+#NEW_ProjectData_withB <- data.matrix(NEW_ProjectData_withB)
+NEW_ProjectData_withB_Lasso <- as.data.frame(NEW_ProjectData_withB_Lasso)
+
+# Please ENTER the dependent variable (class).
+# Please use numbers, not column names. E.g., 82 uses the 82nd column as the dependent variable.
+# You need to make sure that dependent variable takes only two values: 0 and 1.
+dependent_variable = 1
+
+# Please ENTER the attributes to use as independent variables. 
+# Please use numbers, not column names. E.g., c(1:5, 7, 8) uses columns 1,2,3,4,5,7,8.
+independent_variables = c(2:6) # use all the available attributes
+
+ProjectDataFactor <- NEW_ProjectData_withB_Lasso[,independent_variables]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
+
+dependent_variable = unique(sapply(dependent_variable,function(i) min(ncol(NEW_ProjectData_withB_Lasso), max(i,1))))
+independent_variables = unique(sapply(independent_variables,function(i) min(ncol(NEW_ProjectData_withB_Lasso), max(i,1))))
+
+if (length(unique(NEW_ProjectData_withB_Lasso[,dependent_variable])) !=2){
+  cat("\n*****\n BE CAREFUL, THE DEPENDENT VARIABLE TAKES MORE THAN 2 VALUES")
+  cat("\nSplitting it around its median...\n*****\n ")
+  new_dependent = NEW_ProjectData_withB_Lasso[,dependent_variable] >= median(NEW_ProjectData_withB_Lasso[,dependent_variable])
+  NEW_ProjectData_withB_Lasso[,dependent_variable] <- 1*new_dependent
+}
+}
+```
+
+```{r echo=FALSE}
+
+if(Lasso*PCA){
+  Data_Used = NEW_ProjectData_withB_Lasso
+}  else if (PCA){
+  Data_Used = NEW_ProjectData_withB
+} else {
+  Data_Used = ProjectData
+}
+
+if (random_sampling){
+  estimation_data_ids=sample.int(nrow(Data_Used),floor(estimation_data_percent*nrow(Data_Used)/100))
+  non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids) #setdiff(x,y) returns the elements of x that are not in y
+  validation_data_ids=non_estimation_data[sample.int(length(non_estimation_data), floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))]
+  } else {
+    estimation_data_ids=1:floor(estimation_data_percent*nrow(Data_Used)/100)
+    non_estimation_data = setdiff(1:nrow(Data_Used),estimation_data_ids)
+    validation_data_ids = (tail(estimation_data_ids,1)+1):(tail(estimation_data_ids,1) + floor(validation_data_percent/(validation_data_percent+test_data_percent)*length(non_estimation_data)))
+    }
+
+test_data_ids = setdiff(1:nrow(Data_Used), union(estimation_data_ids,validation_data_ids))
+
+estimation_data=Data_Used[estimation_data_ids,]
+validation_data=Data_Used[validation_data_ids,]
+test_data=Data_Used[test_data_ids,]
+```
+
+
+## Step 4: Classification and Interpretation
+
+=======
+
+
+```{r echo=FALSE}
+if(Lasso){
+# Let's get the probabilities for the 3 types of data from Lasso Regression
+estimation_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.estimation_data, family="binomial",type="response")
+validation_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.validation_data, family="binomial",type="response")
+test_Probability_lasso <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.test_data, family="binomial",type="response")
+
+#write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_validation.csv")
+
+#Optimizing the probability threshold to maximize profit
+theprofit_lasso_max <- 0
+
+for (i in 1:100) {
+  test_prediction_lasso=1*as.vector(test_Probability_lasso > i/100)
+  theprofit_lasso <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_lasso==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_lasso==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_lasso==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_lasso==0)
+  if (theprofit_lasso > theprofit_lasso_max){
+    theprofit_lasso_max <- theprofit_lasso
+    Probability_Threshold_lasso <- i/100
+  }
+}
+
+# Let's get the decision of Lasso Regression for the 3 types of data 
+estimation_prediction_class_lasso=1*as.vector(estimation_Probability_lasso > Probability_Threshold_lasso)
+validation_prediction_class_lasso=1*as.vector(validation_Probability_lasso > Probability_Threshold_lasso)
+test_prediction_class_lasso=1*as.vector(test_Probability_lasso > Probability_Threshold_lasso)
+
+Classification_Table_lasso=rbind(validation_data[,dependent_variable],validation_prediction_class_lasso,t(validation_Probability_lasso))
+rownames(Classification_Table_lasso)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_lasso)<- paste("Obs", 1:ncol(Classification_Table_lasso), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table_lasso,2)), max_data_report)) #t(x) returns the transpose of x
+
+
+#### Lift chart
+#plotLift(lasso_probabilities, validation_data$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart
+
+###Confusion matrix  
+#confusionMatrix(lasso_classification,as.factor(validation_data$Bankrupt.),positive = "1")
+#Error: `data` and `reference` should be factors with the same levels.
+
+
+# predicting the performance on new applicants
+#lasso_probabilities <- predict(lasso.opt.fit, s = penalty.lasso, newx =x.prediction, family="binomial",type="response")
+#write.csv(lasso_probabilities, file="predicted_default_probs_LASSO_new_applicants.csv")
+}
+```
+
+**Logistic Regression**: 
+
+```{r echo=FALSE}
+# We first turn the data into data.frame's
+estimation_data = data.frame(estimation_data)
+validation_data = data.frame(validation_data)
+test_data = data.frame(test_data)
+
+formula_log=paste(colnames(estimation_data[,dependent_variable,drop=F]),paste(Reduce(paste,sapply(head(independent_variables,-1), function(i) paste(colnames(estimation_data)[i],"+",sep=""))),colnames(estimation_data)[tail(independent_variables,1)],sep=""),sep="~") # When drop is FALSE, the dimensions of the object are kept. head(x,-1) returns all but the last element of x.
+
+logreg_solution <- glm(formula_log, family=binomial(link="logit"),  data=estimation_data)
+#warning here: glm.fit: algorithm did not converge, glm.fit: fitted probabilities numerically 0 or 1 occurred
+
+log_coefficients <- round(summary(logreg_solution)$coefficients,1)
+
+knitr::kable(round(log_coefficients,2))
+```
+
+Given a set of independent variables, the output of the estimated logistic regression (the sum of the products of the independent variables with the corresponding regression coefficients) can be used to assess the probability an observation belongs to one of the classes. Specifically, the regression output can be transformed into a probability of belonging to, say, class 1 for each observation. The estimated probability that a validation observation belongs to class 1 (e.g., the estimated probability that the customer defaults) for the first few validation observations, using the logistic regression above, is:
+
+```{r echo=FALSE}
+# Let's get the probabilities for the 3 types of data from the logistic regression
+estimation_Probability_class1_log<-predict(logreg_solution, type="response", newdata=estimation_data[,independent_variables])
+validation_Probability_class1_log<-predict(logreg_solution, type="response", newdata=validation_data[,independent_variables])
+test_Probability_class1_log<-predict(logreg_solution, type="response", newdata=test_data[,independent_variables])
+
+#Optimizing the probability threshold to maximize profit
+theprofit_log_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_log=1*as.vector(test_Probability_class1_log > i/100)
+  theprofit_log <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_log==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_log==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_log==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_log==0)
+  if (theprofit_log > theprofit_log_max){
+    theprofit_log_max <- theprofit_log
+    Probability_Threshold_log <- i/100
+  }
+}
+
+# Let's get the decision of the logistic regression for the 3 types of data 
+estimation_prediction_class_log=1*as.vector(estimation_Probability_class1_log > Probability_Threshold_log)
+validation_prediction_class_log=1*as.vector(validation_Probability_class1_log > Probability_Threshold_log)
+test_prediction_class_log=1*as.vector(test_Probability_class1_log > Probability_Threshold_log)
+
+
+Classification_Table_log=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
+rownames(Classification_Table_log)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_log)<- paste("Obs", 1:ncol(Classification_Table_log), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table_log,2)), max_data_report)) #t(x) returns the transpose of x
+```
+
+
+**CART**: CART is a widely used classification method largely because the estimated classification models are easy to interpret. This classification tool iteratively "splits" the data using the most discriminatory independent variable at each step, building a "tree" - as shown below - on the way. The CART methods **limit the size of the tree** using various statistical techniques in order to avoid **overfitting the data**. For example, using the rpart and rpart.control functions in R, we can limit the size of the tree by selecting the functions' **complexity control** parameter **cp**. (What this parameter does exactly is beyond the scope of this note. For the rpart and rpart.control functions in R, smaller values, e.g. cp=0.0001, lead to larger trees, as we will see next.)
+
+
+```{r echo=FALSE}
+# Name the variables numerically so that they look ok on the tree plots
+independent_variables_nolabel = paste("IV", 1:length(independent_variables), sep="")
+
+estimation_data_nolabel = cbind(estimation_data[,dependent_variable], estimation_data[,independent_variables])
+colnames(estimation_data_nolabel)<- c(colnames(estimation_data)[dependent_variable],independent_variables_nolabel)
+
+validation_data_nolabel = cbind(validation_data[,dependent_variable], validation_data[,independent_variables])
+colnames(validation_data_nolabel)<- c(dependent_variable,independent_variables_nolabel)
+
+test_data_nolabel = cbind(test_data[,dependent_variable], test_data[,independent_variables])
+colnames(test_data_nolabel)<- c(dependent_variable,independent_variables_nolabel)
+
+estimation_data_nolabel = data.frame(estimation_data_nolabel)
+validation_data_nolabel = data.frame(validation_data_nolabel)
+test_data_nolabel = data.frame(test_data_nolabel)
+
+formula=paste(colnames(estimation_data)[dependent_variable],paste(Reduce(paste,sapply(head(independent_variables_nolabel,-1), function(i) paste(i,"+",sep=""))),tail(independent_variables_nolabel,1),sep=""),sep="~")
+CART_tree<-rpart(formula, data= estimation_data_nolabel,method="class", control=CART_control)
+
+rpart.plot(CART_tree, box.palette="OrBu", type=3, extra=1, fallen.leaves=F, branch.lty=3)
+```
+
+The leaves of the tree indicate the number of estimation data observations that "reach that leaf" that belong to each class. A perfect classification would only have data from one class in each of the tree leaves. However, such a perfect classification of the estimation data would most likely not be able to classify well out-of-sample data due to overfitting of the estimation data.
+
+```{r echo=FALSE}
+# Tree parameter
+# Please ENTER the new tree (CART) complexity control cp 
+CART_cp = 0.013
+```
+
+One can estimate larger trees through changing the tree's **complexity control** parameter (in this case the rpart.control argument cp). For example, this is how the tree would look like if we set cp=`r toString(CART_cp)`:
+
+```{r echo=FALSE}
+CART_tree_large<-rpart(formula, data= estimation_data_nolabel,method="class", control=rpart.control(cp = CART_cp))
+rpart.plot(CART_tree_large, box.palette="OrBu", type=3, extra=1, fallen.leaves=F, branch.lty=3)
+plotcp(CART_tree_large)
+printcp(CART_tree_large)
+```
+
+One can also use the percentage of data in each leaf of the tree to get an estimate of the probability that an observation (e.g., customer) belongs to a given class. The **purity of the leaf** can indicate the probability that an observation that "reaches that leaf" belongs to a class. In our case, the probability our validation data belong to class 1 (i.e., a customer's likelihood of default) for the first few validation observations, using the first CART above, is:
+
+```{r echo=FALSE}
+# Let's first calculate all probabilites for the estimation, validation, and test data
+estimation_Probability_class1_tree<-predict(CART_tree, estimation_data_nolabel)[,2]
+estimation_Probability_class1_tree_large<-predict(CART_tree_large, estimation_data_nolabel)[,2]
+
+validation_Probability_class1_tree<-predict(CART_tree, validation_data_nolabel)[,2]
+validation_Probability_class1_tree_large<-predict(CART_tree_large, validation_data_nolabel)[,2]
+
+test_Probability_class1_tree<-predict(CART_tree, test_data_nolabel)[,2]
+test_Probability_class1_tree_large<-predict(CART_tree_large, test_data_nolabel)[,2]
+
+#Optimizing the probability threshold to maximize profit
+theprofit_tree_max <- 0
+theprofit_tree_large_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_tree=1*as.vector(test_Probability_class1_tree > i/100)
+  theprofit_tree <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree==0)
+  if (theprofit_tree > theprofit_tree_max){
+    theprofit_tree_max <- theprofit_tree
+    Probability_Threshold_tree <- i/100
+  }
+}
+
+for (i in 1:100) {
+  test_prediction_class_tree_large=1*as.vector(test_Probability_class1_tree_large > i/100)
+  theprofit_tree_large <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree_large==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_tree_large==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree_large==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_tree_large==0)
+  if (theprofit_tree_large > theprofit_tree_large_max){
+    theprofit_tree_large_max <- theprofit_tree_large
+    Probability_Threshold_tree_large <- i/100
+  }
+}
+
+estimation_prediction_class_tree=1*as.vector(estimation_Probability_class1_tree > Probability_Threshold_tree)
+estimation_prediction_class_tree_large=1*as.vector(estimation_Probability_class1_tree_large > Probability_Threshold_tree_large)
+
+validation_prediction_class_tree=1*as.vector(validation_Probability_class1_tree > Probability_Threshold_tree)
+validation_prediction_class_tree_large=1*as.vector(validation_Probability_class1_tree_large > Probability_Threshold_tree_large)
+
+test_prediction_class_tree=1*as.vector(test_Probability_class1_tree > Probability_Threshold_tree)
+test_prediction_class_tree_large=1*as.vector(test_Probability_class1_tree_large > Probability_Threshold_tree_large)
+
+Classification_Table_tree=rbind(validation_data[,dependent_variable],validation_prediction_class_tree,validation_Probability_class1_tree)
+rownames(Classification_Table_tree)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_tree)<- paste("Obs", 1:ncol(Classification_Table_tree), sep=" ")
+
+Classification_Table_large=rbind(validation_data[,dependent_variable],validation_prediction_class_tree_large,validation_Probability_class1_tree_large)
+rownames(Classification_Table_large)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_large)<- paste("Obs", 1:ncol(Classification_Table_large), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table_large,2)), max_data_report))
+```
+
+The table above assumes that the **probability threshold** for considering an observations as "class 1" is `r Probability_Threshold`. In practice we need to select the probability threshold: this is an important choice that we will discuss below.
+
+
+```{r echo=FALSE, comment=NA, warning=FALSE, message=FALSE, results='asis'}
+log_importance = tail(log_coefficients[,"z value", drop=F],-1) # remove the intercept
+log_importance = log_importance/max(abs(log_importance))
+
+tree_importance = CART_tree$variable.importance
+tree_ordered_drivers = as.numeric(gsub("\\IV"," ",names(CART_tree$variable.importance)))
+tree_importance_final = rep(0,length(independent_variables))
+tree_importance_final[tree_ordered_drivers] <- tree_importance
+tree_importance_final <- tree_importance_final/max(abs(tree_importance_final))
+tree_importance_final <- tree_importance_final*sign(log_importance)
+
+large_tree_importance = CART_tree_large$variable.importance
+large_tree_ordered_drivers = as.numeric(gsub("\\IV"," ",names(CART_tree_large$variable.importance)))
+large_tree_importance_final = rep(0,length(independent_variables))
+large_tree_importance_final[large_tree_ordered_drivers] <- large_tree_importance
+large_tree_importance_final <- large_tree_importance_final/max(abs(large_tree_importance_final))
+large_tree_importance_final <- large_tree_importance_final*sign(log_importance)
+
+Importance_table <- cbind(log_importance,tree_importance_final,large_tree_importance_final)
+colnames(Importance_table) <- c("Logistic Regression", "CART 1", "CART 2")
+rownames(Importance_table) <- rownames(log_importance)
+## printing the result in a clean-slate table
+knitr::kable(round(Importance_table,2))
+```
+
+<!-- **XGBoost:** -->
+
+```{r echo=FALSE}
+if (XGBoost){
+model_xgboost <- xgboost(data = as.matrix(estimation_data[,independent_variables]), 
+                         label = estimation_data[,dependent_variable], 
+                         eta = 0.3, 
+                         max_depth = 10, 
+                         nrounds=10, 
+                         objective = "binary:logistic", 
+                         verbose = 0)
+# eta: step size of each boosting step. max.depth: maximum depth of the tree. nrounds: the max number of iterations. We use the logistic regression as the objective. verbose=1 prints information about performance. Check https://www.rdocumentation.org/packages/xgboost/versions/0.4-4/topics/xgboost
+
+# # Alternative way of building the model, recommended when there are factors among the variables (xgboost does not accept factors as inputs, so need to use a design matrix):
+# formula_allvariables=paste(colnames(estimation_data[,dependent_variable,drop=F]),".",sep="~")
+# training.x <-model.matrix(as.formula(formula_allvariables), data = estimation_data)
+# testing.x <-model.matrix(as.formula(formula_allvariables), data = validation_data)
+# 
+# model_xgboost<-xgboost(data = data.matrix(training.x[,-1]), label = estimation_data[,dependent_variable], eta = 0.3, max_depth = 10, nround=10, objective = "binary:logistic", verbose = 1)
+# 
+# xgboost_prediction<-predict(model_xgboost,newdata=testing.x[,-1], type="response")
+# #confusionMatrix(ifelse(XGboost_prediction>0.5,1,0),validation_data$default.payment.next.month) #Display confusion matrix (needs caret package)
+
+
+# Let's get the probabilities for the 3 types of data from xgboost
+estimation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(estimation_data[,independent_variables]), type="response")
+validation_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(validation_data[,independent_variables]), type="response")
+#confusionMatrix(ifelse(validation_Probability_class1_xgboost>0.5,1,0),validation_data[,dependent_variable]) #Display confusion matrix (needs caret package)
+test_Probability_class1_xgboost<-predict(model_xgboost, newdata=as.matrix(test_data[,independent_variables]), type="response")
+
+#Optimizing the probability threshold to maximize profit
+theprofit_xgboost_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_xgboost=1*as.vector(test_Probability_class1_xgboost > i/100)
+  theprofit_xgboost <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_xgboost==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_xgboost==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_xgboost==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_xgboost==0)
+  if (theprofit_xgboost > theprofit_xgboost_max){
+    theprofit_xgboost_max <- theprofit_xgboost
+    Probability_Threshold_xgboost <- i/100
+  }
+}
+
+# Let's get the decision of xgboost for the 3 types of data 
+estimation_prediction_class_xgboost=1*as.vector(estimation_Probability_class1_xgboost > Probability_Threshold_xgboost)
+validation_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold_xgboost)
+test_prediction_class_xgboost=1*as.vector(validation_Probability_class1_xgboost > Probability_Threshold_xgboost)
+
+Classification_Table_xgboost=rbind(validation_data[,dependent_variable],validation_prediction_class_xgboost,validation_Probability_class1_xgboost)
+rownames(Classification_Table_xgboost)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table_xgboost)<- paste("Obs", 1:ncol(Classification_Table_xgboost), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table_xgboost,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```
+
+<!-- **Random Forest:** -->
+```{r echo=FALSE}
+if (Random_Forest){
+model_forest <- randomForest(x=estimation_data[,independent_variables],y=estimation_data[,dependent_variable], importance=TRUE, proximity=TRUE, type="classification")
+# 
+# # Let's get the probabilities for the 3 types of data from the random forest
+ estimation_Probability_class1_random_forest<-predict(model_forest, estimation_data, type="response")
+ validation_Probability_class1_random_forest<-predict(model_forest, validation_data, type="response")
+ test_Probability_class1_random_forest<-predict(model_forest, test_data, type="response")
+# 
+
+#Optimizing the probability threshold to maximize profit
+theprofit_random_forest_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > i/100)
+  theprofit_random_forest <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_random_forest==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_random_forest==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_random_forest==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_random_forest==0)
+  if (theprofit_random_forest > theprofit_random_forest_max){
+    theprofit_random_forest_max <- theprofit_random_forest
+    Probability_Threshold_random_forest <- i/100
+  }
+}
+ 
+# # Let's get the decision of the random forest for the 3 types of data 
+ estimation_prediction_class_random_forest=1*as.vector(estimation_Probability_class1_random_forest > Probability_Threshold_random_forest)
+ validation_prediction_class_random_forest=1*as.vector(validation_Probability_class1_random_forest > Probability_Threshold_random_forest)
+ test_prediction_class_random_forest=1*as.vector(test_Probability_class1_random_forest > Probability_Threshold_random_forest)
+# 
+ Classification_Table_random_forest=rbind(validation_data[,dependent_variable],validation_prediction_class_random_forest,validation_Probability_class1_random_forest)
+ rownames(Classification_Table_random_forest)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table_random_forest)<- paste("Obs", 1:ncol(Classification_Table_random_forest), sep=" ")
+# 
+ knitr::kable(head(t(round(Classification_Table_random_forest,2)), max_data_report)) #t(x) returns the transpose of x
+#potential error here: The response has five or fewer unique values.  Are you sure you want to do regression?
+
+}
+```
+<!-- **SVM:** -->
+```{r echo=FALSE}
+if (SVM){
+  pacman::p_load("caret","ROCR","lift","glmnet","MASS","e1071") 
+model_svm <- svm(Bankrupt. ~., data=estimation_data, probability=TRUE)
+
+# # Let's get the probabilities for the 3 types of data from the random forest
+ estimation_Probability_class1_svm<-predict(model_svm, newdata=estimation_data, type="response")
+ validation_Probability_class1_svm<-predict(model_svm, newdata=validation_data, type="response")
+ test_Probability_class1_svm<-predict(model_svm, newdata=test_data, type="response")
+# 
+ 
+#Optimizing the probability threshold to maximize profit
+theprofit_svm_max <- 0
+
+for (i in 1:100) {
+  test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > i/100)
+  theprofit_svm <- Profit_Matrix[1,1]*sum(test_data[,dependent_variable]==1 & test_prediction_class_svm==1)+
+    Profit_Matrix[1,2]*sum(test_data[,dependent_variable]==1 & test_prediction_class_svm==0)+
+    Profit_Matrix[2,1]*sum(test_data[,dependent_variable]==0 & test_prediction_class_svm==1)+
+    Profit_Matrix[2,2]*sum(test_data[,dependent_variable]==0 & test_prediction_class_svm==0)
+  if (theprofit_svm > theprofit_svm_max){
+    theprofit_svm_max <- theprofit_svm
+    Probability_Threshold_svm <- i/100
+  }
+}
+
+# # Let's get the decision of the random forest for the 3 types of data 
+ estimation_prediction_class_svm=1*as.vector(estimation_Probability_class1_svm > Probability_Threshold_svm)
+ validation_prediction_class_svm=1*as.vector(validation_Probability_class1_svm > Probability_Threshold_svm)
+ test_prediction_class_svm=1*as.vector(test_Probability_class1_svm > Probability_Threshold_svm)
+# 
+ Classification_Table_svm=rbind(validation_data[,dependent_variable],validation_prediction_class_svm,validation_Probability_class1_svm)
+ rownames(Classification_Table_svm)<-c("Actual Class","Predicted Class","Probability of Class 1")
+ colnames(Classification_Table_svm)<- paste("Obs", 1:ncol(Classification_Table_svm), sep=" ")
+# 
+ knitr::kable(head(t(round(Classification_Table_svm,2)), max_data_report)) #t(x) returns the transpose of x
+}
+```
+
+## Step 5: Validation accuracy
+Using the predicted class probabilities of the validation data, as outlined above, we can  generate some measures of classification performance. Before discussing them, note that given the probability an observation belongs to a class, **a reasonable class prediction choice is to predict the class that has the highest probability**. However, this does not need to be the only choice in practice.
+
+> Selecting the probability threshold based on which we predict the class of an observation is a decision the user needs to make. While in some cases a reasonable probability threshold is 50%, in other cases it may be 99.9% or 0.1%.
+
+For different choices of the probability threshold, one can measure a number of classification performance metrics, which are outlined next.
+
+### 1.  Hit ratio
+This is the percentage of the observations that have been correctly classified (i.e., the predicted class and the actual class are the same). We can just count the number of the validation data correctly classified and divide this number with the total number of the validation data, using the two CART and the logistic regression above. These are as follows for probability threshold `r Probability_Threshold*100`%:
+
+```{r echo=FALSE}
+validation_actual=validation_data[,dependent_variable]
+validation_predictions = rbind(validation_prediction_class_lasso,
+                               validation_prediction_class_log,
+                               validation_prediction_class_tree,
+                               validation_prediction_class_tree_large,
+                               validation_prediction_class_xgboost,
+                               validation_prediction_class_random_forest,
+                               validation_prediction_class_svm)
+validation_hit_rates = rbind(
+  100*sum(validation_prediction_class_lasso==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_log==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_tree==validation_actual)/length(validation_actual), 
+  100*sum(validation_prediction_class_tree_large==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_xgboost==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_random_forest==validation_actual)/length(validation_actual),
+  100*sum(validation_prediction_class_svm==validation_actual)/length(validation_actual)
+  )
+colnames(validation_hit_rates) <- "Hit Ratio"
+rownames(validation_hit_rates) <- c("Lasso Regression","Logistic Regression", "First CART", "Second CART","XGBoost","Random Forest","SVM")
+knitr::kable(validation_hit_rates)
+```
+
+For the estimation data, the hit rates are:
+```{r echo=FALSE}
+estimation_actual=estimation_data[,dependent_variable]
+estimation_predictions = rbind(estimation_prediction_class_lasso,
+                               estimation_prediction_class_log,
+                               estimation_prediction_class_tree,
+                               estimation_prediction_class_tree_large,
+                               estimation_prediction_class_xgboost,
+                               estimation_prediction_class_random_forest,
+                               estimation_prediction_class_svm)
+estimation_hit_rates = rbind(
+  100*sum(estimation_prediction_class_lasso==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_log==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_tree==estimation_actual)/length(estimation_actual), 
+  100*sum(estimation_prediction_class_tree_large==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_xgboost==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_random_forest==estimation_actual)/length(estimation_actual),
+  100*sum(estimation_prediction_class_svm==estimation_actual)/length(estimation_actual)
+  )
+colnames(estimation_hit_rates) <- "Hit Ratio"
+rownames(estimation_hit_rates) <- c("Lasso Regression", "Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM")
+knitr::kable(estimation_hit_rates)
+```
+
+A simple benchmark to compare the hit ratio performance of a classification model against is the **Maximum Chance Criterion**. This measures the proportion of the class with the largest size. For our validation data the largest group is customers who do not default: `r sum(!validation_actual)` out of `r length(validation_actual)` customers). Clearly, if we classified all individuals into the largest group, we could get a hit ratio of `r round(100*sum(!validation_actual)/length(validation_actual), 2)`% without doing any work. One should have a hit rate of at least as much as the Maximum Chance Criterion rate, although as we discuss next there are more performance criteria to consider. 
+
+### 2. Confusion matrix
+The confusion matrix shows for each class the number (or percentage) of the  data that are correctly classified for that class. For example, for the method above with the highest hit rate in the validation data (among logistic regression and the 2 CART models), and for probability threshold `r Probability_Threshold*100`%, the confusion matrix for the validation data is:
+
+```{r echo=FALSE}
+#validation_predictions = rbind(validation_prediction_class_lasso,
+#                               validation_prediction_class_log,
+#                               validation_prediction_class_tree,
+#                               validation_prediction_class_tree_large,
+#                               validation_prediction_class_xgboost,
+#                               validation_prediction_class_random_forest,
+#                               validation_prediction_class_svm)
+#validation_prediction_best = validation_predictions[which.max(validation_hit_rates),]
+
+validation_prediction_best = validation_predictions[1,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Lasso Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Lasso Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[2,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Log Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Log Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Log Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Log Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[3,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Ctree Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Ctree Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[4,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rpart Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rpart Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[5,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Xgboost Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Xgboost Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[6,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rforest Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rforest Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+validation_prediction_best = validation_predictions[6,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(validation_prediction_best*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!validation_prediction_best)*validation_data[,dependent_variable])/sum(validation_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!validation_prediction_best)*(!validation_data[,dependent_variable]))/sum((!validation_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("SVM Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("SVM Actual 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+```
+
+### 3. ROC curve
+Remember that each observation is classified by our model according to the probabilities Pr(0) and Pr(1) and a chosen probability threshold. Typically we set the probability threshold to 0.5 - so that observations for which Pr(1) > 0.5 are classified as 1's. However, we can vary this threshold, for example if we are interested in correctly predicting all 1's but do not mind missing some 0's (and vice-versa).
+
+When we change the probability threshold we get different values of hit rate, false positive and false negative rates, or any other performance metric. We can plot for example how the false positive versus true positive rates change as we alter the probability threshold, and generate the so called ROC curve. 
+
+The ROC curves for the validation data for the logistic regression as well as both the CARTs above are as follows:
+
+```{r echo=FALSE}
+validation_actual_class <- as.numeric(validation_data[,dependent_variable])
+
+pred_lasso <- prediction(validation_Probability_lasso, validation_actual_class)
+pred_tree <- prediction(validation_Probability_class1_tree, validation_actual_class)
+pred_tree_large <- prediction(validation_Probability_class1_tree_large, validation_actual_class)
+pred_log <- prediction(validation_Probability_class1_log, validation_actual_class)
+pred_xgboost <- prediction(validation_Probability_class1_xgboost, validation_actual_class)
+pred_random_forest <- prediction(validation_Probability_class1_random_forest, validation_actual_class)
+pred_svm <- prediction(validation_Probability_class1_svm, validation_actual_class)
+
+test1<-performance(pred_tree, "tpr", "fpr")
+df1<- cbind(as.data.frame(test1@x.values),as.data.frame(test1@y.values))
+colnames(df1) <- c("False Positive rate CART 1", "True Positive rate CART 1")
+plot1 <- ggplot(df1, aes(x=`False Positive rate CART 1`, y=`True Positive rate CART 1`)) + geom_line()
+
+test2<-performance(pred_log, "tpr", "fpr")
+df2<- cbind(as.data.frame(test2@x.values),as.data.frame(test2@y.values))
+colnames(df2) <- c("False Positive rate log reg", "True Positive rate log reg")
+plot2 <- ggplot(df2, aes(x=`False Positive rate log reg`, y=`True Positive rate log reg`)) + geom_line()
+
+test3<-performance(pred_tree_large, "tpr", "fpr")
+df3<- cbind(as.data.frame(test3@x.values),as.data.frame(test3@y.values))
+colnames(df3) <- c("False Positive rate CART 2", "True Positive rate CART 2")
+plot3 <- ggplot(df3, aes(x=`False Positive rate CART 2`, y=`True Positive rate CART 2`)) + geom_line()
+
+test4<-performance(pred_xgboost, "tpr", "fpr")
+df4<- cbind(as.data.frame(test4@x.values),as.data.frame(test4@y.values))
+colnames(df4) <- c("False Positive rate XGBoost", "True Positive rate XGBoost")
+plot4 <- ggplot(df4, aes(x=`False Positive rate XGBoost`, y=`True Positive rate XGBoost`)) + geom_line()
+
+test5<-performance(pred_random_forest, "tpr", "fpr")
+df5<- cbind(as.data.frame(test5@x.values),as.data.frame(test5@y.values))
+colnames(df5) <- c("False Positive rate Random Forest", "True Positive rate Random Forest")
+plot5 <- ggplot(df5, aes(x=`False Positive rate Random Forest`, y=`True Positive rate Random Forest`)) + geom_line()
+
+test6<-performance(pred_svm, "tpr", "fpr")
+df6<- cbind(as.data.frame(test6@x.values),as.data.frame(test6@y.values))
+colnames(df6) <- c("False Positive rate SVM", "True Positive rate SVM")
+plot6 <- ggplot(df6, aes(x=`False Positive rate SVM`, y=`True Positive rate SVM`)) + geom_line()
+
+test7<-performance(pred_lasso, "tpr", "fpr")
+df7<- cbind(as.data.frame(test7@x.values),as.data.frame(test7@y.values))
+colnames(df7) <- c("False Positive rate Lasso", "True Positive rate Lasso")
+plot7 <- ggplot(df7, aes(x=`False Positive rate lasso`, y=`True Positive rate lasso`)) + geom_line()
+
+# We can plot the curves individually 
+# grid.arrange(plot1, plot2, plot3)   # use `fig.height=7.5` for the grid plot
+
+# But we are going to combine them instead
+df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7), function(df) {
+  df <- melt(df, id=1)
+  df$variable <- sub("True Positive rate ", "", df$variable)
+  colnames(df)[1] <- "False Positive rate"
+  df
+}))
+
+#ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="blue")
+ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+```
+
+### 5. Profit curve
+Finally, we can generate the so called profit curve, which we often use to make our final decisions. The intuition is as follows. Consider a direct marketing campaign, and suppose it costs $1 to send an advertisement, and the expected profit from a person who responds positively is $45. Suppose you have a database of 1 million people to whom you could potentially send the promotion. Typical response rates are 0.05%. What fraction of the 1 million people should you send the promotion to? 
+
+To answer this type of questions, we need to create the **profit curve**. We can measure some measure of profit if we only select the top cases in terms of the probability of response assigned by our classifier. We can plot the profit curve by changing, as we did for the gains chart, the percentage of cases we select, and calculating the corresponding total **estimated profit** (or loss) we would generate. This is simply equal to:
+
+> Total Estimated Profit = (% of 1's correctly predicted)x(value of capturing a 1) + (% of 0's correctly predicted)x(value of capturing a 0) + (% of 1's incorrectly predicted as 0)x(cost of missing a 1) + (% of 0's incorrectly predicted as 1)x(cost of missing a 0)
+> 
+> Calculating the expected profit requires we have an estimate of the four costs/values: the value of capturing a 1 or a 0, and the cost of misclassifying a 1 into a 0 or vice versa. 
+
+Given the values and costs of correct classifications and misclassifications, we can plot the total estimated profit (or loss) as we change the percentage of cases we select, i.e., the probability threshold of the classifier, like we did for the ROC and the gains chart. 
+
+In our credit card default case, we consider the following business profit and loss to the credit card issuer for the correctly classified and misclassified customers: 
+
+```{r echo=FALSE}
+knitr::kable(Profit_Matrix)
+```
+
+Based on these profit and cost estimates, the profit curves for the validation data for the three classifiers are:
+
+```{r echo=FALSE}
+actual_class <- validation_data[,dependent_variable]
+
+probs <- validation_Probability_class1_tree
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame1 <- data.frame(
+  `CART 1 % selected` = res[1,],
+  `CART 1 est. profit` = res[2,],
+  check.names = FALSE
+)
+plot1 <- ggplot(frame1, aes(x=`CART 1 % selected`, y=`CART 1 est. profit`)) + geom_line()
+
+probs <- validation_Probability_class1_tree_large
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame2 <- data.frame(
+  `CART 2 % selected` = res[1,],
+  `CART 2 est. profit` = res[2,],
+  check.names = FALSE
+)
+plot2 <- ggplot(frame2, aes(x=`CART 2 % selected`, y=`CART 2 est. profit`)) + geom_line()
+
+probs <- validation_Probability_class1_log
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame3 <- data.frame(
+  `log reg % selected` = res[1,],
+  `log reg est. profit` = res[2,],
+  check.names = FALSE
+)
+plot3 <- ggplot(frame3, aes(x=`log reg % selected`, y=`log reg est. profit`)) + geom_line()
+
+probs <- validation_Probability_class1_xgboost
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame4 <- data.frame(
+  `XG Boost % selected` = res[1,],
+  `XG Boost est. profit` = res[2,],
+  check.names = FALSE
+)
+plot4 <- ggplot(frame3, aes(x=`XGBoost % selected`, y=`XGBoost est. profit`)) + geom_line()
+
+probs <- validation_Probability_class1_random_forest
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame5 <- data.frame(
+  `Random Forest % selected` = res[1,],
+  `Random Forest est. profit` = res[2,],
+  check.names = FALSE
+)
+plot5 <- ggplot(frame3, aes(x=`Randomf Forest % selected`, y=`Random Forest est. profit`)) + geom_line()
+
+probs <- validation_Probability_class1_svm
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame6 <- data.frame(
+  `SVM % selected` = res[1,],
+  `SVM est. profit` = res[2,],
+  check.names = FALSE
+)
+plot6 <- ggplot(frame3, aes(x=`SVM % selected`, y=`SVM est. profit`)) + geom_line()
+
+probs <- validation_Probability_lasso
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame7 <- data.frame(
+  `Lasso % selected` = res[1,],
+  `Lasso est. profit` = res[2,],
+  check.names = FALSE
+)
+plot7 <- ggplot(frame3, aes(x=`Lasso % selected`, y=`Lasso est. profit`)) + geom_line()
+
+# we can plot the curves individually 
+# grid.arrange(plot1, plot2, plot3)   # use `fig.height=7.5` for the grid plot
+
+# But we're going to combine them instead
+df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6, frame7), function(df) {
+  df <- melt(df, id=1)
+  df$variable <- sub(" est. profit", "", df$variable)
+  colnames(df)[1] <- "% of validation data selected"
+  df
+}))
+#ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + geom_line() + ylab("Estimated profit")
+ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+```
+
+## Step 6. Test Accuracy
+Having iterated steps 2-5 until we are satisfied with the performance of our selected model on the validation data, in this step the performance analysis outlined in step 5 needs to be done with the test sample. This is the performance that best mimics what one should expect in practice upon deployment of the classification solution, **assuming (as always) that the data used for this performance analysis are representative of the situation in which the solution will be deployed.** 
+
+Let's see in our case how the **hit ratio, confusion matrix, ROC curve, gains chart, and profit curve** look like for our test data. For the hit ratio and the confusion matrix we use `r Probability_Threshold*100`% as the probability threshold for classification.
+
+```{r echo=FALSE}
+######for test data#####
+test_actual=test_data[,dependent_variable]
+
+sum_test_all_methods = test_prediction_class_lasso+
+                         test_prediction_class_log+
+                         test_prediction_class_tree+
+                         test_prediction_class_tree_large+
+                         test_prediction_class_xgboost+
+                         test_prediction_class_random_forest+
+                         test_prediction_class_svm
+
+sum_test_all_methods[sum_test_all_methods<=4] <- 0
+sum_test_all_methods[sum_test_all_methods>4] <- 1
+  
+test_predictions = rbind(test_prediction_class_lasso,
+                         test_prediction_class_log,
+                         test_prediction_class_tree,
+                         test_prediction_class_tree_large,
+                         test_prediction_class_xgboost,
+                         test_prediction_class_random_forest,
+                         test_prediction_class_svm,
+                         sum_test_all_methods)
+test_hit_rates = rbind(
+  100*sum(test_prediction_class_lasso==test_actual)/length(test_actual),
+  100*sum(test_prediction_class_log==test_actual)/length(test_actual),
+  100*sum(test_prediction_class_tree==test_actual)/length(test_actual), 
+  100*sum(test_prediction_class_tree_large==test_actual)/length(test_actual),
+  100*sum(test_prediction_class_xgboost==test_actual)/length(test_actual),
+  100*sum(test_prediction_class_random_forest==test_actual)/length(test_actual),
+  100*sum(test_prediction_class_svm==test_actual)/length(test_actual),
+  100*sum(sum_test_all_methods==test_actual)/length(test_actual)
+  )
+colnames(test_hit_rates) <- "Hit Ratio"
+rownames(test_hit_rates) <- c("Lasso Regression", "Logistic Regression","First CART", "Second CART","XGBoost","Random Forest","SVM","Majority_Vote")
+
+knitr::kable(test_hit_rates)
+```
+
+The confusion matrix for the model with the best test data hit ratio above:
+
+```{r echo=FALSE, message=FALSE, prompt=FALSE, results='asis'}
+#test_prediction_best = test_predictions[which.max(test_hit_rates),]
+
+test_prediction_best = test_predictions[1,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Lasso Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Lasso Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Lasso Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[2,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Log Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Log Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Log Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Log Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[3,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Ctree Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Ctree Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Ctree Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[4,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rpart Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rpart Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rpart Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[5,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Xgboost Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Xgboost Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Xgboost Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[6,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Rforest Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Rforest Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Rforest Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+
+test_prediction_best = test_predictions[7,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("SVM Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("SVM Actual 1 (", class_1_interpretation, ")", sep = ""), paste("SVM Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+
+test_prediction_best = test_predictions[8,]
+conf_matrix = matrix(rep(0,4),ncol=2)
+conf_matrix[1,1]<- 100*sum(test_prediction_best*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[1,2]<- 100*sum((!test_prediction_best)*test_data[,dependent_variable])/sum(test_data[,dependent_variable])
+conf_matrix[2,1]<- 100*sum((test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix[2,2]<- 100*sum((!test_prediction_best)*(!test_data[,dependent_variable]))/sum((!test_data[,dependent_variable]))
+conf_matrix = round(conf_matrix,2)
+
+colnames(conf_matrix) <- c(paste("Majority Predicted 1 (", class_1_interpretation, ")", sep = ""), paste("Majority Predicted 0 (", class_0_interpretation, ")", sep = ""))
+rownames(conf_matrix) <- c(paste("Majority Actual 1 (", class_1_interpretation, ")", sep = ""), paste("Majority Actual 0 (", class_0_interpretation, ")", sep = ""))
+knitr::kable(conf_matrix)
+```
+
+ROC curves for the test data:
+
+```{r echo=FALSE}
+test_actual_class <- as.numeric(test_data[,dependent_variable])
+
+pred_tree_test <- prediction(test_Probability_class1_tree, test_actual_class)
+pred_tree_large_test <- prediction(test_Probability_class1_tree_large, test_actual_class)
+pred_log_test <- prediction(test_Probability_class1_log, test_actual_class)
+pred_xgboost_test <- prediction(test_Probability_class1_xgboost, test_actual_class)
+pred_random_forest_test <- prediction(test_Probability_class1_random_forest, test_actual_class)
+pred_svm_test <- prediction(test_Probability_class1_svm, test_actual_class)
+pred_lasso_test <- prediction(test_Probability_lasso, test_actual_class)
+pred_majority_test <- prediction(sum_test_all_methods, test_actual_class)
+
+test<-performance(pred_tree_test, "tpr", "fpr")
+df1<- cbind(as.data.frame(test@x.values),as.data.frame(test@y.values))
+colnames(df1) <- c("False Positive rate CART 1", "True Positive CART 1")
+
+test2<-performance(pred_tree_large_test, "tpr", "fpr")
+df2<- cbind(as.data.frame(test2@x.values),as.data.frame(test2@y.values))
+colnames(df2) <- c("False Positive rate CART 2", "True Positive CART 2")
+
+test3<-performance(pred_log_test, "tpr", "fpr")
+df3<- cbind(as.data.frame(test3@x.values),as.data.frame(test3@y.values))
+colnames(df3) <- c("False Positive rate log reg", "True Positive log reg")
+
+test4<-performance(pred_xgboost_test, "tpr", "fpr")
+df4<- cbind(as.data.frame(test4@x.values),as.data.frame(test4@y.values))
+colnames(df4) <- c("False Positive rate XGBoost", "True Positive rate XGBoost")
+plot4 <- ggplot(df4, aes(x=`False Positive rate XGBoost`, y=`True Positive rate XGBoost`)) + geom_line()
+
+test5<-performance(pred_random_forest_test, "tpr", "fpr")
+df5<- cbind(as.data.frame(test5@x.values),as.data.frame(test5@y.values))
+colnames(df5) <- c("False Positive rate Random Forest", "True Positive rate Random Forest")
+plot5 <- ggplot(df5, aes(x=`False Positive rate Random Forest`, y=`True Positive rate Random Forest`)) + geom_line()
+
+test6<-performance(pred_svm_test, "tpr", "fpr")
+df6<- cbind(as.data.frame(test6@x.values),as.data.frame(test6@y.values))
+colnames(df6) <- c("False Positive rate SVM", "True Positive rate SVM")
+plot6 <- ggplot(df6, aes(x=`False Positive rate SVM`, y=`True Positive rate SVM`)) + geom_line()
+
+test7<-performance(pred_lasso_test, "tpr", "fpr")
+df7<- cbind(as.data.frame(test7@x.values),as.data.frame(test7@y.values))
+colnames(df7) <- c("False Positive rate Lasso", "True Positive rate Lasso")
+plot7 <- ggplot(df7, aes(x=`False Positive rate lasso`, y=`True Positive rate lasso`)) + geom_line()
+
+test8<-performance(pred_majority_test, "tpr", "fpr")
+df8<- cbind(as.data.frame(test8@x.values),as.data.frame(test8@y.values))
+colnames(df8) <- c("False Positive rate Majority", "True Positive rate Majority")
+plot8 <- ggplot(df8, aes(x=`False Positive rate Majority`, y=`True Positive rate Majority`)) + geom_line()
+
+df.all <- do.call(rbind, lapply(list(df1, df2, df3, df4, df5, df6, df7, df8), function(df) {
+  df <- melt(df, id=1)
+  df$variable <- sub("True Positive ", "", df$variable)
+  colnames(df)[1] <- "False Positive rate"
+  df
+}))
+#ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`False Positive rate`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red", "green")) + geom_line() + ylab("True Positive rate") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+```
+```{r echo=FALSE}
+
+auc.tmp <- performance(pred_tree_test,"auc") #Create AUC data
+tree_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Ctree")
+print(tree_auc_validation)
+
+auc.tmp <- performance(pred_tree_large_test,"auc") #Create AUC data
+large_tree_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Rpart")
+print(large_tree_auc_validation)
+
+auc.tmp <- performance(pred_log_test,"auc") #Create AUC data
+log_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Log")
+print(log_auc_validation)
+
+auc.tmp <- performance(pred_xgboost_test,"auc") #Create AUC data
+xgboost_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Xgboost")
+print(xgboost_auc_validation)
+
+auc.tmp <- performance(pred_random_forest_test,"auc") #Create AUC data
+random_forest_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Random Forest")
+print(random_forest_auc_validation)
+
+auc.tmp <- performance(pred_svm_test,"auc") #Create AUC data
+svm_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("SVM")
+print(svm_auc_validation)
+
+auc.tmp <- performance(pred_lasso_test,"auc") #Create AUC data
+lasso_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Lasso")
+print(lasso_auc_validation)
+
+auc.tmp <- performance(pred_majority_test,"auc") #Create AUC data
+majority_auc_validation <- as.numeric(auc.tmp@y.values) #Calculate AUC
+print("Majority")
+print(majority_auc_validation)
+
+```
+
+Finally the profit curves for the test data, using the same profit/cost estimates as above:
+
+```{r echo=FALSE}
+actual_class<- test_data[,dependent_variable]
+
+probs <- test_Probability_class1_tree
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame1 <- data.frame(
+  `CART 1 % selected` = res[1,],
+  `CART 1 est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- test_Probability_class1_tree_large
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame2 <- data.frame(
+  `CART 2 % selected` = res[1,],
+  `CART 2 est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- test_Probability_class1_log
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame3 <- data.frame(
+  `log reg % selected` = res[1,],
+  `log reg est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- test_Probability_class1_xgboost
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame4 <- data.frame(
+  `XG Boost % selected` = res[1,],
+  `XG Boost est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- test_Probability_class1_random_forest
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame5 <- data.frame(
+  `Random Forest % selected` = res[1,],
+  `Random Forest est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- test_Probability_class1_svm
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame6 <- data.frame(
+  `SVM % selected` = res[1,],
+  `SVM est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- test_Probability_lasso
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame7 <- data.frame(
+  `Lasso % selected` = res[1,],
+  `Lasso est. profit` = res[2,],
+  check.names = FALSE
+)
+
+probs <- sum_test_all_methods
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame8 <- data.frame(
+  `Majority % selected` = res[1,],
+  `Majority est. profit` = res[2,],
+  check.names = FALSE
+)
+
+df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6, frame7, frame8), function(df) {
+  df <- melt(df, id=1)
+  df$variable <- sub(" est. profit", "", df$variable)
+  colnames(df)[1] <- "% of test data selected"
+  df
+}))
+#ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + geom_line() + ylab("Estimated profit")
+ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red", "green")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+```

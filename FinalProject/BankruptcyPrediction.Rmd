@@ -558,9 +558,12 @@ estimation_prediction_class_lasso=1*as.vector(estimation_Probability_lasso > Pro
 validation_prediction_class_lasso=1*as.vector(validation_Probability_lasso > Probability_Threshold_lasso)
 test_prediction_class_lasso=1*as.vector(test_Probability_lasso > Probability_Threshold_lasso)
 
-#Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_lasso,validation_Probability_lasso)
-#rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-#colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+Classification_Table_lasso=rbind(validation_data[,dependent_variable],validation_prediction_class_lasso,t(validation_Probability_lasso))
+rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+
+knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
+
 
 #### Lift chart
 #plotLift(lasso_probabilities, validation_data$Bankrupt., cumulative = TRUE, n.buckets = 10) # Plot Lift chart

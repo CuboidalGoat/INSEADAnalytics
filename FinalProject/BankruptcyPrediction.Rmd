@@ -625,9 +625,9 @@ validation_prediction_class_log=1*as.vector(validation_Probability_class1_log > 
 test_prediction_class_log=1*as.vector(test_Probability_class1_log > Probability_Threshold_log)
 
 
-#Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
-#rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
-#colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
+Classification_Table=rbind(validation_data[,dependent_variable],validation_prediction_class_log,validation_Probability_class1_log)
+rownames(Classification_Table)<-c("Actual Class","Predicted Class","Probability of Class 1")
+colnames(Classification_Table)<- paste("Obs", 1:ncol(Classification_Table), sep=" ")
 
 knitr::kable(head(t(round(Classification_Table,2)), max_data_report)) #t(x) returns the transpose of x
 ```
@@ -1219,18 +1219,37 @@ frame6 <- data.frame(
   check.names = FALSE
 )
 plot6 <- ggplot(frame3, aes(x=`SVM % selected`, y=`SVM est. profit`)) + geom_line()
+
+probs <- validation_Probability_lasso
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame7 <- data.frame(
+  `Lasso % selected` = res[1,],
+  `Lasso est. profit` = res[2,],
+  check.names = FALSE
+)
+plot7 <- ggplot(frame3, aes(x=`Lasso % selected`, y=`Lasso est. profit`)) + geom_line()
+
 # we can plot the curves individually 
 # grid.arrange(plot1, plot2, plot3)   # use `fig.height=7.5` for the grid plot
 
 # But we're going to combine them instead
-df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6), function(df) {
+df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6, frame7), function(df) {
   df <- melt(df, id=1)
   df$variable <- sub(" est. profit", "", df$variable)
   colnames(df)[1] <- "% of validation data selected"
   df
 }))
 #ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + geom_line() + ylab("Estimated profit")
-ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```
 
 We can then select the percentage of selected cases that corresponds to the maximum estimated profit (or minimum loss, if necessary). 
@@ -1455,12 +1474,29 @@ frame6 <- data.frame(
   check.names = FALSE
 )
 
-df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6), function(df) {
+probs <- test_Probability_lasso
+xaxis <- sort(unique(c(0,1,probs)), decreasing = TRUE)
+res <- Reduce(cbind,lapply(xaxis, function(prob){
+  useonly <- which(probs >= prob)
+  predict_class <- 1*(probs >= prob)
+  theprofit <- Profit_Matrix[1,1]*sum(actual_class==1 & predict_class==1)+
+    Profit_Matrix[1,2]*sum(actual_class==1 & predict_class==0)+
+    Profit_Matrix[2,1]*sum(actual_class==0 & predict_class==1)+
+    Profit_Matrix[2,2]*sum(actual_class==0 & predict_class==0)
+  c(100*length(useonly)/length(actual_class), theprofit) 
+}))
+frame7 <- data.frame(
+  `Lasso % selected` = res[1,],
+  `Lasso est. profit` = res[2,],
+  check.names = FALSE
+)
+
+df.all <- do.call(rbind, lapply(list(frame1, frame2, frame3, frame4, frame5, frame6, frame7), function(df) {
   df <- melt(df, id=1)
   df$variable <- sub(" est. profit", "", df$variable)
   colnames(df)[1] <- "% of test data selected"
   df
 }))
 #ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + geom_line() + ylab("Estimated profit")
-ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
+ggplot(df.all, aes(x=`% of test data selected`, y=value, colour=variable)) + scale_colour_manual(values = c("yellow", "cyan", "blue", "dark green","darkred","coral","red")) + geom_line() + ylab("Estimated profit") + geom_abline(intercept = 0, slope = 1,linetype="dotted",colour="green")
 ```

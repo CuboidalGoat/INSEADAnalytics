@@ -1263,8 +1263,11 @@ ggplot(df.all, aes(x=`% of validation data selected`, y=value, colour=variable))
 ## Step 6. Test Accuracy
 Having iterated steps 2-5 until we are satisfied with the performance of our selected model on the validation data, in this step the performance analysis outlined in step 5 needs to be done with the test sample. This is the performance that best mimics what one should expect in practice upon deployment of the classification solution, **assuming (as always) that the data used for this performance analysis are representative of the situation in which the solution will be deployed.** 
 
+<<<<<<< HEAD
 We introduced a new method (ensemble method) in this section to check if it could give an even better results than the 7 methods. We name it as "majority" here.
 
+=======
+>>>>>>> bdb679b952e3e8a464c650407e5ffc738a0230d9
 Let's see in our case how the **hit ratio, confusion matrix, ROC curve, and profit curve** look like for our test data. For the hit ratio and the confusion matrix we use `r Probability_Threshold*100`% as the probability threshold for classification.
 
 ```{r echo=FALSE}
